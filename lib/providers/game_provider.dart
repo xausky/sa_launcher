@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/game.dart';
 import '../services/game_storage.dart';
@@ -32,6 +33,7 @@ class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
   // 更新游戏
   Future<void> updateGame(Game updatedGame) async {
     try {
+      debugPrint('updateGame: ${updatedGame.toJson()}');
       await GameStorage.updateGame(updatedGame);
       await loadGames(); // 重新加载列表
     } catch (error, stackTrace) {

@@ -6,7 +6,7 @@ import '../models/game.dart';
 
 class GameStorage {
   static const String _gamesKey = 'games';
-  static const String _coversDir = 'game_covers';
+  static const String _coversDir = 'covers';
 
   static Future<List<Game>> getGames() async {
     final prefs = await SharedPreferences.getInstance();
@@ -62,7 +62,10 @@ class GameStorage {
     }
 
     final extension = path.extension(imagePath);
-    final newPath = path.join(coversDir.path, '$gameId$extension');
+    final newPath = path.join(
+      coversDir.path,
+      '${DateTime.now().millisecondsSinceEpoch}$extension',
+    );
 
     await file.copy(newPath);
     return newPath;

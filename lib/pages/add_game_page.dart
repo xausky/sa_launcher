@@ -28,6 +28,7 @@ class _AddGamePageState extends State<AddGamePage> {
 
   String? _coverImagePath;
   bool _isLoading = false;
+  bool _coverImageChanged = false; // 标记封面是否有变化
 
   @override
   void initState() {
@@ -85,6 +86,7 @@ class _AddGamePageState extends State<AddGamePage> {
       if (result != null && result.files.isNotEmpty) {
         setState(() {
           _coverImagePath = result.files.first.path!;
+          _coverImageChanged = true;
         });
       }
     } catch (e) {
@@ -123,6 +125,7 @@ class _AddGamePageState extends State<AddGamePage> {
 
             setState(() {
               _coverImagePath = tempFile.path;
+              _coverImageChanged = true;
             });
           } catch (e) {
             _showErrorDialog('处理剪切板图像失败: $e');
@@ -139,6 +142,7 @@ class _AddGamePageState extends State<AddGamePage> {
   void _removeCoverImage() {
     setState(() {
       _coverImagePath = null;
+      _coverImageChanged = true;
     });
   }
 
@@ -172,25 +176,38 @@ class _AddGamePageState extends State<AddGamePage> {
 
     try {
       String? savedCoverPath;
+      final gameId =
+          widget.gameToEdit?.id ??
+          DateTime.now().millisecondsSinceEpoch.toString();
 
-      // 如果选择了新的封面图片，保存它
-      if (_coverImagePath != null) {
-        final gameId =
-            widget.gameToEdit?.id ??
-            DateTime.now().millisecondsSinceEpoch.toString();
-        savedCoverPath = await GameStorage.saveGameCover(
-          _coverImagePath!,
-          gameId,
-        );
+      // 处理封面图片更新
+      if (_coverImageChanged) {
+        // 如果是编辑模式且有旧封面，先删除旧封面
+        if (widget.gameToEdit != null &&
+            widget.gameToEdit!.coverImagePath != null) {
+          await GameStorage.deleteGameCover(widget.gameToEdit!.coverImagePath!);
+        }
+
+        // 如果选择了新的封面图片，保存它
+        if (_coverImagePath != null) {
+          savedCoverPath = await GameStorage.saveGameCover(
+            _coverImagePath!,
+            gameId,
+          );
+        } else {
+          // 用户删除了封面，设置为null
+          savedCoverPath = null;
+        }
+      } else {
+        // 封面没有变化，保持原有路径
+        savedCoverPath = widget.gameToEdit?.coverImagePath;
       }
 
       final game = Game(
-        id:
-            widget.gameToEdit?.id ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
+        id: gameId,
         title: _titleController.text.trim(),
         executablePath: _pathController.text.trim(),
-        coverImagePath: savedCoverPath ?? widget.gameToEdit?.coverImagePath,
+        coverImagePath: savedCoverPath,
         createdAt: widget.gameToEdit?.createdAt ?? DateTime.now(),
       );
 
@@ -308,6 +325,7 @@ class _AddGamePageState extends State<AddGamePage> {
                                                   BorderRadius.circular(6),
                                               child: Image.file(
                                                 File(_coverImagePath!),
+                                                key: ValueKey(_coverImagePath!),
                                                 fit: BoxFit.cover,
                                                 width: 200,
                                                 height: 200 / 0.75,

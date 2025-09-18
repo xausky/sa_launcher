@@ -224,6 +224,7 @@ class _GameCardState extends State<GameCard> {
                       borderRadius: BorderRadius.circular(11),
                       child: Image.file(
                         File(widget.game.coverImagePath!),
+                        key: ValueKey(widget.game.coverImagePath!),
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: double.infinity,

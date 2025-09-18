@@ -50,8 +50,8 @@ class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
         final game = currentState.value.firstWhere((g) => g.id == gameId);
 
         // 删除封面图片
-        if (game.coverImagePath != null) {
-          await GameStorage.deleteGameCover(game.coverImagePath!);
+        if (game.coverImageFileName != null) {
+          await GameStorage.deleteGameCover(game.coverImageFileName!);
         }
       }
 

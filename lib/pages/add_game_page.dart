@@ -9,6 +9,7 @@ import '../models/game.dart';
 import '../providers/game_provider.dart';
 import '../services/game_storage.dart';
 import '../services/game_launcher.dart';
+import '../services/app_data_service.dart';
 
 class AddGamePage extends StatefulWidget {
   final Game? gameToEdit;
@@ -38,7 +39,12 @@ class _AddGamePageState extends State<AddGamePage> {
       _titleController.text = widget.gameToEdit!.title;
       _pathController.text = widget.gameToEdit!.executablePath;
       _saveDataPathController.text = widget.gameToEdit!.saveDataPath ?? '';
-      _coverImagePath = widget.gameToEdit!.coverImagePath;
+      // 如果编辑现有游戏，需要获取完整路径用于显示
+      if (widget.gameToEdit!.coverImageFileName != null) {
+        AppDataService.getGameCoverPath(
+          widget.gameToEdit!.coverImageFileName,
+        ).then((path) => setState(() => _coverImagePath = path));
+      }
     }
     // 获取焦点以支持键盘事件
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -201,8 +207,10 @@ class _AddGamePageState extends State<AddGamePage> {
       if (_coverImageChanged) {
         // 如果是编辑模式且有旧封面，先删除旧封面
         if (widget.gameToEdit != null &&
-            widget.gameToEdit!.coverImagePath != null) {
-          await GameStorage.deleteGameCover(widget.gameToEdit!.coverImagePath!);
+            widget.gameToEdit!.coverImageFileName != null) {
+          await GameStorage.deleteGameCover(
+            widget.gameToEdit!.coverImageFileName!,
+          );
         }
 
         // 如果选择了新的封面图片，保存它
@@ -216,15 +224,15 @@ class _AddGamePageState extends State<AddGamePage> {
           savedCoverPath = null;
         }
       } else {
-        // 封面没有变化，保持原有路径
-        savedCoverPath = widget.gameToEdit?.coverImagePath;
+        // 封面没有变化，保持原有文件名
+        savedCoverPath = widget.gameToEdit?.coverImageFileName;
       }
 
       final game = Game(
         id: gameId,
         title: _titleController.text.trim(),
         executablePath: _pathController.text.trim(),
-        coverImagePath: savedCoverPath,
+        coverImageFileName: savedCoverPath,
         saveDataPath: _saveDataPathController.text.trim().isEmpty
             ? null
             : _saveDataPathController.text.trim(),

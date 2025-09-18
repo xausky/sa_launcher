@@ -5,6 +5,7 @@ import '../models/game.dart';
 import '../models/save_backup.dart';
 import '../services/save_backup_service.dart';
 import '../services/auto_backup_service.dart';
+import '../services/app_data_service.dart';
 import '../providers/game_process_provider.dart';
 import 'add_game_page.dart';
 
@@ -305,31 +306,38 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.grey, width: 1),
                   ),
-                  child:
-                      widget.game.coverImagePath != null &&
-                          File(widget.game.coverImagePath!).existsSync()
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(7),
-                          child: Image.file(
-                            File(widget.game.coverImagePath!),
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                          ),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.games,
-                              size: 32,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
+                  child: FutureBuilder<String?>(
+                    future: AppDataService.getGameCoverPath(
+                      widget.game.coverImageFileName,
+                    ),
+                    builder: (context, snapshot) {
+                      final coverPath = snapshot.data;
+
+                      return coverPath != null && File(coverPath).existsSync()
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(7),
+                              child: Image.file(
+                                File(coverPath),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.games,
+                                  size: 32,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            );
+                    },
+                  ),
                 ),
                 const SizedBox(width: 16),
 

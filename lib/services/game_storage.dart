@@ -34,17 +34,23 @@ class GameStorage {
     final coversDir = await AppDataService.getGameCoversDirectory();
 
     final extension = path.extension(imagePath);
-    final fileName =
-        '${gameId}_${DateTime.now().millisecondsSinceEpoch}$extension';
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}$extension';
     final newPath = path.join(coversDir.path, fileName);
 
     await file.copy(newPath);
-    return newPath;
+    return fileName; // 只返回文件名，不返回完整路径
   }
 
-  static Future<void> deleteGameCover(String coverPath) async {
+  static Future<void> deleteGameCover(String? coverFileName) async {
     try {
+      if (coverFileName == null || coverFileName.isEmpty) {
+        return;
+      }
+
+      final coversDir = await AppDataService.getGameCoversDirectory();
+      final coverPath = path.join(coversDir.path, coverFileName);
       final file = File(coverPath);
+
       if (await file.exists()) {
         await file.delete();
       }

@@ -5,6 +5,21 @@ import '../models/save_backup.dart';
 import 'app_data_service.dart';
 import 'save_backup_service.dart';
 
+// 备份检查结果
+class BackupCheckResult {
+  final bool shouldApply;
+  final DateTime? autoBackupTime;
+  final DateTime? saveDataTime;
+  final String reason;
+
+  BackupCheckResult({
+    required this.shouldApply,
+    this.autoBackupTime,
+    this.saveDataTime,
+    required this.reason,
+  });
+}
+
 class AutoBackupService {
   static const String _autoBackupName = 'auto';
 
@@ -162,6 +177,113 @@ class AutoBackupService {
       }
     } catch (e) {
       debugPrint('删除自动备份失败: $e');
+    }
+  }
+
+  // 检查游戏启动前是否需要应用自动备份
+  static Future<bool> shouldApplyAutoBackupBeforeLaunch(Game game) async {
+    final result = await checkAutoBackupBeforeLaunch(game);
+    return result.shouldApply;
+  }
+
+  // 详细检查游戏启动前是否需要应用自动备份
+  static Future<BackupCheckResult> checkAutoBackupBeforeLaunch(
+    Game game,
+  ) async {
+    try {
+      // 检查游戏是否配置了存档路径
+      if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
+        return BackupCheckResult(shouldApply: false, reason: '未配置存档路径');
+      }
+
+      // 获取当前的自动备份
+      final autoBackup = await _getCurrentAutoBackup(game.id);
+      if (autoBackup == null) {
+        return BackupCheckResult(shouldApply: false, reason: '没有可用的自动备份');
+      }
+
+      final saveDataDir = Directory(game.saveDataPath!);
+
+      // 如果存档目录不存在，说明需要应用自动备份
+      if (!await saveDataDir.exists()) {
+        debugPrint('存档目录不存在，建议应用自动备份: ${game.title}');
+        return BackupCheckResult(
+          shouldApply: true,
+          autoBackupTime: autoBackup.createdAt,
+          saveDataTime: null,
+          reason: '存档目录不存在',
+        );
+      }
+
+      // 获取存档目录的最新文件修改时间
+      final latestModifyTime = await _getLatestModifyTime(saveDataDir);
+
+      // 如果存档目录为空，建议应用自动备份
+      if (latestModifyTime == null) {
+        debugPrint('存档目录为空，建议应用自动备份: ${game.title}');
+        return BackupCheckResult(
+          shouldApply: true,
+          autoBackupTime: autoBackup.createdAt,
+          saveDataTime: null,
+          reason: '存档目录为空',
+        );
+      }
+
+      // 计算时间差（以分钟为单位）
+      final timeDifference = autoBackup.createdAt.difference(latestModifyTime);
+      final minutesDifference = timeDifference.inMinutes.abs();
+
+      // 只有当自动备份比存档目录更新且相差超过1分钟时，才建议应用
+      if (autoBackup.createdAt.isAfter(latestModifyTime) &&
+          minutesDifference > 1) {
+        debugPrint('自动备份比当前存档更新超过1分钟，建议应用: ${game.title}');
+        debugPrint('自动备份时间: ${autoBackup.createdAt}');
+        debugPrint('存档最新时间: $latestModifyTime');
+        debugPrint('时间差: ${minutesDifference}分钟');
+
+        return BackupCheckResult(
+          shouldApply: true,
+          autoBackupTime: autoBackup.createdAt,
+          saveDataTime: latestModifyTime,
+          reason: '自动备份更新（相差${minutesDifference}分钟）',
+        );
+      }
+
+      return BackupCheckResult(
+        shouldApply: false,
+        autoBackupTime: autoBackup.createdAt,
+        saveDataTime: latestModifyTime,
+        reason: '当前存档已是最新',
+      );
+    } catch (e) {
+      debugPrint('检查启动前备份应用失败: $e');
+      return BackupCheckResult(shouldApply: false, reason: '检查失败: $e');
+    }
+  }
+
+  // 应用自动备份
+  static Future<bool> applyAutoBackup(Game game) async {
+    try {
+      final autoBackup = await _getCurrentAutoBackup(game.id);
+      if (autoBackup == null ||
+          game.saveDataPath == null ||
+          game.saveDataPath!.isEmpty) {
+        return false;
+      }
+
+      final success = await SaveBackupService.applyBackup(
+        autoBackup,
+        game.saveDataPath!,
+      );
+      if (success) {
+        debugPrint('自动备份应用成功: ${game.title}');
+      } else {
+        debugPrint('自动备份应用失败: ${game.title}');
+      }
+      return success;
+    } catch (e) {
+      debugPrint('应用自动备份失败: $e');
+      return false;
     }
   }
 }

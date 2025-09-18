@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import '../models/game.dart';
@@ -233,23 +234,27 @@ class AppDataService {
 
   // 生成备份文件名（使用base64编码的备份名称）
   static String generateBackupFileName(String backupName) {
-    final base64Name = base64Encode(utf8.encode(backupName));
-    // 替换可能在文件名中有问题的字符
-    return base64Name.replaceAll('/', '_').replaceAll('+', '-');
+    return base64UrlEncode(utf8.encode(backupName));
   }
 
   // 从备份文件名解码备份名称
   static String decodeBackupFileName(String fileName) {
     try {
-      // 移除.zip扩展名
-      final base64Name = fileName.replaceAll('.zip', '');
-      // 还原替换的字符
-      final restored = base64Name.replaceAll('_', '/').replaceAll('-', '+');
-      final bytes = base64Decode(restored);
+      final bytes = base64Decode(fileName.replaceAll('.zip', ''));
       return utf8.decode(bytes);
     } catch (e) {
       print('解码备份文件名失败: $e');
       return fileName;
     }
+  }
+
+  // 根据文件名获取完整的封面路径
+  static Future<String?> getGameCoverPath(String? coverFileName) async {
+    if (coverFileName == null || coverFileName.isEmpty) {
+      return null;
+    }
+
+    final coversDir = await getGameCoversDirectory();
+    return path.join(coversDir.path, coverFileName);
   }
 }

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/game.dart';
 import '../providers/game_provider.dart';
 import '../providers/game_process_provider.dart';
+import '../services/auto_backup_service.dart';
+import '../services/app_data_service.dart';
 import 'add_game_page.dart';
 import 'game_detail_page.dart';
 import 'settings_page.dart';
@@ -115,6 +117,28 @@ class HomePage extends ConsumerWidget {
     Game game,
   ) async {
     try {
+      // 检查是否需要应用自动备份
+      final checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
+        game,
+      );
+
+      if (checkResult.shouldApply) {
+        final shouldApply = await _showAutoBackupDialog(
+          context,
+          game,
+          checkResult,
+        );
+        if (shouldApply == true) {
+          // 显示应用备份的进度对话框
+          final applySuccess = await _showApplyBackupProgress(context, game);
+          if (!applySuccess) {
+            _showErrorDialog(context, '应用自动备份失败');
+            return;
+          }
+        }
+      }
+
+      // 启动游戏
       final success = await ref
           .read(gameProcessProvider.notifier)
           .launchGame(game.id, game.executablePath);
@@ -188,6 +212,171 @@ class HomePage extends ConsumerWidget {
     ).push(MaterialPageRoute(builder: (context) => const SettingsPage()));
   }
 
+  // 显示自动备份应用提示对话框
+  Future<bool?> _showAutoBackupDialog(
+    BuildContext context,
+    Game game,
+    BackupCheckResult checkResult,
+  ) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.auto_awesome, color: Colors.green[600]),
+            const SizedBox(width: 12),
+            const Text('发现更新的自动备份'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '游戏 "${game.title}" 存在更新的自动备份存档。',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+
+            // 时间信息卡片
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome,
+                        color: Colors.green[600],
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        '自动备份时间:',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatDateTime(checkResult.autoBackupTime!),
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.folder, color: Colors.blue[600], size: 16),
+                      const SizedBox(width: 6),
+                      const Text(
+                        '存档目录时间:',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    checkResult.saveDataTime != null
+                        ? _formatDateTime(checkResult.saveDataTime!)
+                        : '不存在或为空',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: checkResult.saveDataTime != null
+                          ? null
+                          : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange[200]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.orange[600], size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      '应用备份将覆盖当前存档文件！',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text('是否要应用自动备份后再启动游戏？', style: TextStyle(fontSize: 14)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('跳过'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('应用备份'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 显示应用备份进度对话框
+  Future<bool> _showApplyBackupProgress(BuildContext context, Game game) async {
+    bool success = false;
+
+    // 显示进度对话框
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('正在应用自动备份'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('正在应用游戏 "${game.title}" 的自动备份...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // 异步执行备份应用
+      success = await AutoBackupService.applyAutoBackup(game);
+    } catch (e) {
+      success = false;
+    } finally {
+      // 关闭进度对话框
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    }
+
+    return success;
+  }
+
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
@@ -202,6 +391,11 @@ class HomePage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
+        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }
 
@@ -249,28 +443,39 @@ class _GameCardState extends ConsumerState<GameCard> {
                 border: Border.all(color: Colors.grey, width: 1),
                 color: Colors.grey[50],
               ),
-              child:
-                  widget.game.coverImagePath != null &&
-                      File(widget.game.coverImagePath!).existsSync()
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(11),
-                      child: Image.file(
-                        File(widget.game.coverImagePath!),
-                        key: ValueKey(widget.game.coverImagePath!),
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                      ),
-                    )
-                  : Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.games, size: 48, color: Colors.grey),
-                      ),
-                    ),
+              child: FutureBuilder<String?>(
+                future: AppDataService.getGameCoverPath(
+                  widget.game.coverImageFileName,
+                ),
+                builder: (context, snapshot) {
+                  final coverPath = snapshot.data;
+
+                  return coverPath != null && File(coverPath).existsSync()
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(11),
+                          child: Image.file(
+                            File(coverPath),
+                            key: ValueKey(widget.game.coverImageFileName!),
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.games,
+                              size: 48,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        );
+                },
+              ),
             ),
 
             // 游戏标题（浮动在封面底部）

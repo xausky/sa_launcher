@@ -1,50 +1,27 @@
-import 'dart:convert';
 import 'dart:io';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
 import '../models/game.dart';
+import 'app_data_service.dart';
 
 class GameStorage {
-  static const String _gamesKey = 'games';
-  static const String _coversDir = 'covers';
-
   static Future<List<Game>> getGames() async {
-    final prefs = await SharedPreferences.getInstance();
-    final gamesJson = prefs.getString(_gamesKey);
-
-    if (gamesJson == null) {
-      return [];
-    }
-
-    final gamesList = jsonDecode(gamesJson) as List;
-    return gamesList.map((json) => Game.fromJson(json)).toList();
+    return await AppDataService.getAllGames();
   }
 
   static Future<void> saveGames(List<Game> games) async {
-    final prefs = await SharedPreferences.getInstance();
-    final gamesJson = jsonEncode(games.map((game) => game.toJson()).toList());
-    await prefs.setString(_gamesKey, gamesJson);
+    await AppDataService.saveGames(games);
   }
 
   static Future<void> addGame(Game game) async {
-    final games = await getGames();
-    games.add(game);
-    await saveGames(games);
+    await AppDataService.addGame(game);
   }
 
   static Future<void> updateGame(Game updatedGame) async {
-    final games = await getGames();
-    final index = games.indexWhere((game) => game.id == updatedGame.id);
-    if (index != -1) {
-      games[index] = updatedGame;
-      await saveGames(games);
-    }
+    await AppDataService.updateGame(updatedGame);
   }
 
   static Future<void> deleteGame(String gameId) async {
-    final games = await getGames();
-    games.removeWhere((game) => game.id == gameId);
-    await saveGames(games);
+    await AppDataService.deleteGame(gameId);
   }
 
   static Future<String> saveGameCover(String imagePath, String gameId) async {
@@ -53,19 +30,13 @@ class GameStorage {
       throw Exception('图片文件不存在');
     }
 
-    // 获取应用文档目录
-    final directory = Directory.systemTemp; // 临时使用系统临时目录
-    final coversDir = Directory(path.join(directory.path, _coversDir));
-
-    if (!await coversDir.exists()) {
-      await coversDir.create(recursive: true);
-    }
+    // 获取游戏封面目录
+    final coversDir = await AppDataService.getGameCoversDirectory();
 
     final extension = path.extension(imagePath);
-    final newPath = path.join(
-      coversDir.path,
-      '${DateTime.now().millisecondsSinceEpoch}$extension',
-    );
+    final fileName =
+        '${gameId}_${DateTime.now().millisecondsSinceEpoch}$extension';
+    final newPath = path.join(coversDir.path, fileName);
 
     await file.copy(newPath);
     return newPath;
@@ -79,6 +50,7 @@ class GameStorage {
       }
     } catch (e) {
       // 忽略删除错误
+      print('删除封面文件失败: $e');
     }
   }
 }

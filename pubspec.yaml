@@ -50,6 +50,9 @@ dependencies:
   # 剪切板处理
   super_clipboard: ^0.9.1
   
+  # 路径获取
+  path_provider: ^2.1.1
+  
   # 状态管理
   flutter_riverpod: ^2.4.9
 

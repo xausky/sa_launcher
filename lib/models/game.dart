@@ -3,6 +3,7 @@ class Game {
   final String title;
   final String executablePath;
   final String? coverImagePath;
+  final String? saveDataPath;
   final DateTime createdAt;
 
   Game({
@@ -10,6 +11,7 @@ class Game {
     required this.title,
     required this.executablePath,
     this.coverImagePath,
+    this.saveDataPath,
     required this.createdAt,
   });
 
@@ -19,6 +21,7 @@ class Game {
       'title': title,
       'executablePath': executablePath,
       'coverImagePath': coverImagePath,
+      'saveDataPath': saveDataPath,
       'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
@@ -29,6 +32,7 @@ class Game {
       title: json['title'],
       executablePath: json['executablePath'],
       coverImagePath: json['coverImagePath'],
+      saveDataPath: json['saveDataPath'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt']),
     );
   }
@@ -38,6 +42,7 @@ class Game {
     String? title,
     String? executablePath,
     String? coverImagePath,
+    String? saveDataPath,
     DateTime? createdAt,
   }) {
     return Game(
@@ -45,6 +50,7 @@ class Game {
       title: title ?? this.title,
       executablePath: executablePath ?? this.executablePath,
       coverImagePath: coverImagePath ?? this.coverImagePath,
+      saveDataPath: saveDataPath ?? this.saveDataPath,
       createdAt: createdAt ?? this.createdAt,
     );
   }

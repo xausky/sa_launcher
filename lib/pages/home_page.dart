@@ -5,6 +5,7 @@ import '../models/game.dart';
 import '../providers/game_provider.dart';
 import '../providers/game_process_provider.dart';
 import 'add_game_page.dart';
+import 'game_detail_page.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -94,6 +95,7 @@ class HomePage extends ConsumerWidget {
             onLaunch: () => _launchGame(context, ref, game),
             onEdit: () => _editGame(context, ref, game),
             onDelete: () => _deleteGame(context, ref, game),
+            onDetail: () => _showGameDetail(context, game),
           );
         },
       ),
@@ -167,6 +169,12 @@ class HomePage extends ConsumerWidget {
     }
   }
 
+  void _showGameDetail(BuildContext context, Game game) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => GameDetailPage(game: game)));
+  }
+
   void _showErrorDialog(BuildContext context, String message) {
     showDialog(
       context: context,
@@ -189,6 +197,7 @@ class GameCard extends ConsumerStatefulWidget {
   final VoidCallback onLaunch;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onDetail;
 
   const GameCard({
     super.key,
@@ -196,6 +205,7 @@ class GameCard extends ConsumerStatefulWidget {
     required this.onLaunch,
     required this.onEdit,
     required this.onDelete,
+    required this.onDetail,
   });
 
   @override
@@ -353,6 +363,15 @@ class _GameCardState extends ConsumerState<GameCard> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          IconButton(
+                            onPressed: widget.onDetail,
+                            icon: const Icon(Icons.info),
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.purple,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           IconButton(
                             onPressed: widget.onEdit,
                             icon: const Icon(Icons.edit),

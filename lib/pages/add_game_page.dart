@@ -24,6 +24,7 @@ class _AddGamePageState extends State<AddGamePage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _pathController = TextEditingController();
+  final _saveDataPathController = TextEditingController();
   final _focusNode = FocusNode();
 
   String? _coverImagePath;
@@ -36,6 +37,7 @@ class _AddGamePageState extends State<AddGamePage> {
     if (widget.gameToEdit != null) {
       _titleController.text = widget.gameToEdit!.title;
       _pathController.text = widget.gameToEdit!.executablePath;
+      _saveDataPathController.text = widget.gameToEdit!.saveDataPath ?? '';
       _coverImagePath = widget.gameToEdit!.coverImagePath;
     }
     // 获取焦点以支持键盘事件
@@ -48,6 +50,7 @@ class _AddGamePageState extends State<AddGamePage> {
   void dispose() {
     _titleController.dispose();
     _pathController.dispose();
+    _saveDataPathController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -72,6 +75,20 @@ class _AddGamePageState extends State<AddGamePage> {
       }
     } catch (e) {
       _showErrorDialog('选择文件失败: $e');
+    }
+  }
+
+  Future<void> _pickSaveDataPath() async {
+    try {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: '选择存档文件夹',
+      );
+
+      if (selectedDirectory != null) {
+        _saveDataPathController.text = selectedDirectory;
+      }
+    } catch (e) {
+      _showErrorDialog('选择文件夹失败: $e');
     }
   }
 
@@ -208,6 +225,9 @@ class _AddGamePageState extends State<AddGamePage> {
         title: _titleController.text.trim(),
         executablePath: _pathController.text.trim(),
         coverImagePath: savedCoverPath,
+        saveDataPath: _saveDataPathController.text.trim().isEmpty
+            ? null
+            : _saveDataPathController.text.trim(),
         createdAt: widget.gameToEdit?.createdAt ?? DateTime.now(),
       );
 
@@ -428,6 +448,22 @@ class _AddGamePageState extends State<AddGamePage> {
                               }
                               return null;
                             },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // 存档路径
+                          TextFormField(
+                            controller: _saveDataPathController,
+                            decoration: InputDecoration(
+                              labelText: '存档路径 (可选)',
+                              hintText: '选择游戏存档文件夹',
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                onPressed: _pickSaveDataPath,
+                                icon: const Icon(Icons.folder_open),
+                              ),
+                            ),
+                            readOnly: true,
                           ),
                           const SizedBox(height: 24),
 

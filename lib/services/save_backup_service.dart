@@ -28,9 +28,11 @@ class SaveBackupService {
       );
 
       final backupId = DateTime.now().millisecondsSinceEpoch.toString();
-      // 使用base64编码的备份名称作为文件名
-      final encodedName = AppDataService.generateBackupFileName(backupName);
-      final backupFileName = '$encodedName.zip';
+
+      // 对于自动备份，直接使用 auto.zip，其他备份使用base64编码
+      final backupFileName = backupName == 'auto'
+          ? 'auto.zip'
+          : '${AppDataService.generateBackupFileName(backupName)}.zip';
       final backupFilePath = path.join(gameBackupDir.path, backupFileName);
 
       // 创建ZIP压缩包

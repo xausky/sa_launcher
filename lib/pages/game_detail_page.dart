@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as path;
 import '../models/game.dart';
 import '../models/save_backup.dart';
 import '../services/save_backup_service.dart';
+import '../services/auto_backup_service.dart';
 import '../providers/game_process_provider.dart';
 import 'add_game_page.dart';
 
@@ -31,8 +31,10 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
     setState(() => _isLoading = true);
     try {
       final backups = await SaveBackupService.getGameBackups(widget.game.id);
+      // 使用自动备份服务的排序方法，自动备份置顶
+      final sortedBackups = AutoBackupService.sortBackupsWithAutoFirst(backups);
       setState(() {
-        _backups = backups;
+        _backups = sortedBackups;
         _isLoading = false;
       });
     } catch (e) {
@@ -515,11 +517,39 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
   }
 
   Widget _buildBackupItem(SaveBackup backup) {
+    final isAutoBackup = AutoBackupService.isAutoBackup(backup);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
+      color: isAutoBackup ? Colors.green[50] : null,
       child: ListTile(
-        leading: const Icon(Icons.archive, color: Colors.blue),
-        title: Text(backup.name),
+        leading: Icon(
+          isAutoBackup ? Icons.auto_awesome : Icons.archive,
+          color: isAutoBackup ? Colors.green : Colors.blue,
+        ),
+        title: Row(
+          children: [
+            Text(isAutoBackup ? '自动备份' : backup.name),
+            if (isAutoBackup) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'AUTO',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

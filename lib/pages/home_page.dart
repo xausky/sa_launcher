@@ -6,6 +6,7 @@ import '../providers/game_provider.dart';
 import '../providers/game_process_provider.dart';
 import 'add_game_page.dart';
 import 'game_detail_page.dart';
+import 'settings_page.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -20,8 +21,14 @@ class HomePage extends ConsumerWidget {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           IconButton(
+            onPressed: () => _openSettings(context),
+            icon: const Icon(Icons.settings),
+            tooltip: '设置',
+          ),
+          IconButton(
             onPressed: () => ref.read(gameListProvider.notifier).refresh(),
             icon: const Icon(Icons.refresh),
+            tooltip: '刷新',
           ),
         ],
       ),
@@ -173,6 +180,12 @@ class HomePage extends ConsumerWidget {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => GameDetailPage(game: game)));
+  }
+
+  void _openSettings(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const SettingsPage()));
   }
 
   void _showErrorDialog(BuildContext context, String message) {

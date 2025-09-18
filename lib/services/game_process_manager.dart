@@ -2,6 +2,9 @@ import 'dart:io';
 import 'dart:async';
 import 'package:path/path.dart' as path;
 import '../models/game_process.dart';
+import '../models/game.dart';
+import '../services/app_data_service.dart';
+import '../services/auto_backup_service.dart';
 
 class GameProcessManager {
   static final GameProcessManager _instance = GameProcessManager._internal();
@@ -86,7 +89,9 @@ class GameProcessManager {
         final isRunning = await _isProcessRunning(gameInfo.processId);
 
         if (!isRunning) {
-          // 进程已结束，移除游戏
+          // 进程已结束，触发自动备份检查
+          _onGameEnded(gameId);
+          // 移除游戏
           gamesToRemove.add(gameId);
         }
       } catch (e) {
@@ -153,6 +158,33 @@ class GameProcessManager {
     } catch (e) {
       print('终止游戏进程失败: $e');
       return false;
+    }
+  }
+
+  // 游戏结束时的处理
+  void _onGameEnded(String gameId) {
+    // 异步处理自动备份，不阻塞进程监控
+    _handleAutoBackup(gameId);
+  }
+
+  // 处理自动备份
+  Future<void> _handleAutoBackup(String gameId) async {
+    try {
+      // 获取游戏信息
+      final games = await AppDataService.getAllGames();
+      Game? game;
+      try {
+        game = games.firstWhere((g) => g.id == gameId);
+      } catch (e) {
+        game = null;
+      }
+
+      if (game != null) {
+        // 检查并创建自动备份
+        await AutoBackupService.checkAndCreateAutoBackup(game);
+      }
+    } catch (e) {
+      print('处理自动备份失败: $e');
     }
   }
 

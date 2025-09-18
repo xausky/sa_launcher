@@ -155,7 +155,11 @@ class AppDataService {
             if (backupFile is File && backupFile.path.endsWith('.zip')) {
               try {
                 final fileName = path.basenameWithoutExtension(backupFile.path);
-                final backupName = decodeBackupFileName(fileName);
+
+                // 对于 auto.zip 文件，直接使用 'auto' 作为备份名称
+                final backupName = fileName == 'auto'
+                    ? 'auto'
+                    : decodeBackupFileName(fileName);
                 final stat = await backupFile.stat();
 
                 // 从文件名生成备份ID（使用文件修改时间的毫秒数）
@@ -203,6 +207,28 @@ class AppDataService {
   static Future<List<SaveBackup>> getGameBackups(String gameId) async {
     final allBackups = await getAllBackups();
     return allBackups.where((backup) => backup.gameId == gameId).toList();
+  }
+
+  // 获取设置
+  static Future<Map<String, dynamic>> getSettings() async {
+    final appData = await readAppData();
+    return appData['settings'] as Map<String, dynamic>? ?? <String, dynamic>{};
+  }
+
+  // 更新设置
+  static Future<void> updateSettings(Map<String, dynamic> newSettings) async {
+    final appData = await readAppData();
+    final currentSettings =
+        appData['settings'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    currentSettings.addAll(newSettings);
+    appData['settings'] = currentSettings;
+    await writeAppData(appData);
+  }
+
+  // 获取特定设置值
+  static Future<T?> getSetting<T>(String key, [T? defaultValue]) async {
+    final settings = await getSettings();
+    return settings[key] as T? ?? defaultValue;
   }
 
   // 生成备份文件名（使用base64编码的备份名称）

@@ -56,6 +56,9 @@ dependencies:
   # 状态管理
   flutter_riverpod: ^2.4.9
 
+  # 窗口管理
+  window_manager: ^0.5.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

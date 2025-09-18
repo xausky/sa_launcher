@@ -297,8 +297,8 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
               children: [
                 // 游戏封面
                 Container(
-                  width: 120,
-                  height: 90,
+                  width: 100,
+                  height: 100 / 0.75,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.grey, width: 1),
@@ -336,16 +336,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.game.title,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildInfoRow(
-                        '可执行文件',
-                        path.basename(widget.game.executablePath),
-                      ),
+                      _buildInfoRow('执行文件', widget.game.executablePath),
                       if (widget.game.saveDataPath != null &&
                           widget.game.saveDataPath!.isNotEmpty)
                         _buildInfoRow('存档路径', widget.game.saveDataPath!),

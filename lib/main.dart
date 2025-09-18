@@ -1,8 +1,28 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 import 'pages/home_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // 初始化window_manager（仅在桌面平台）
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    await windowManager.ensureInitialized();
+
+    WindowOptions windowOptions = const WindowOptions(
+      title: 'SALauncher',
+      size: Size(1280, 720),
+      center: true,
+    );
+
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
+
   runApp(const ProviderScope(child: GameLauncherApp()));
 }
 
@@ -18,7 +38,6 @@ class GameLauncherApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const HomePage(),
-      debugShowCheckedModeBanner: false,
     );
   }
 }

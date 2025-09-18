@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/game.dart';
 import '../providers/game_provider.dart';
-import '../services/game_launcher.dart';
+import '../providers/game_process_provider.dart';
 import 'add_game_page.dart';
 
 class HomePage extends ConsumerWidget {
@@ -91,7 +91,7 @@ class HomePage extends ConsumerWidget {
           final game = games[index];
           return GameCard(
             game: game,
-            onLaunch: () => _launchGame(context, game),
+            onLaunch: () => _launchGame(context, ref, game),
             onEdit: () => _editGame(context, ref, game),
             onDelete: () => _deleteGame(context, ref, game),
           );
@@ -100,9 +100,15 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _launchGame(BuildContext context, Game game) async {
+  Future<void> _launchGame(
+    BuildContext context,
+    WidgetRef ref,
+    Game game,
+  ) async {
     try {
-      final success = await GameLauncher.launchGame(game.executablePath);
+      final success = await ref
+          .read(gameProcessProvider.notifier)
+          .launchGame(game.id, game.executablePath);
       if (!success) {
         _showErrorDialog(context, '启动游戏失败');
       }
@@ -178,7 +184,7 @@ class HomePage extends ConsumerWidget {
   }
 }
 
-class GameCard extends StatefulWidget {
+class GameCard extends ConsumerStatefulWidget {
   final Game game;
   final VoidCallback onLaunch;
   final VoidCallback onEdit;
@@ -193,14 +199,17 @@ class GameCard extends StatefulWidget {
   });
 
   @override
-  State<GameCard> createState() => _GameCardState();
+  ConsumerState<GameCard> createState() => _GameCardState();
 }
 
-class _GameCardState extends State<GameCard> {
+class _GameCardState extends ConsumerState<GameCard> {
   bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
+    final isRunning = ref.watch(isGameRunningProvider(widget.game.id));
+    final processId = ref.watch(gameProcessIdProvider(widget.game.id));
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -258,23 +267,49 @@ class _GameCardState extends State<GameCard> {
                   ),
                 ),
                 padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
-                child: Text(
-                  widget.game.title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        offset: Offset(0, 1),
-                        blurRadius: 2,
-                        color: Colors.black54,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.game.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            offset: Offset(0, 1),
+                            blurRadius: 2,
+                            color: Colors.black54,
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (isRunning) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'PID: $processId',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  ],
                 ),
               ),
             ),
@@ -290,15 +325,30 @@ class _GameCardState extends State<GameCard> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      ElevatedButton.icon(
-                        onPressed: widget.onLaunch,
-                        icon: const Icon(Icons.play_arrow),
-                        label: const Text('启动'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
+                      if (!isRunning)
+                        ElevatedButton.icon(
+                          onPressed: widget.onLaunch,
+                          icon: const Icon(Icons.play_arrow),
+                          label: const Text('启动'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            await ref
+                                .read(gameProcessProvider.notifier)
+                                .killGame(widget.game.id);
+                          },
+                          icon: const Icon(Icons.stop),
+                          label: const Text('停止'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,

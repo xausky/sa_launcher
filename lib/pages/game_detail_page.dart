@@ -347,10 +347,10 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildInfoRow('执行文件', widget.game.executablePath),
+                      _buildPathInfoRow('执行文件', widget.game.executablePath),
                       if (widget.game.saveDataPath != null &&
                           widget.game.saveDataPath!.isNotEmpty)
-                        _buildInfoRow('存档路径', widget.game.saveDataPath!),
+                        _buildPathInfoRow('存档路径', widget.game.saveDataPath!),
                       if (isRunning)
                         _buildInfoRow(
                           '运行状态',
@@ -435,6 +435,60 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildPathInfoRow(String label, String value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                color: color,
+                fontWeight: color != null ? FontWeight.bold : null,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => _openDirectory(value, label),
+            icon: const Icon(Icons.folder_open, size: 18),
+            tooltip: '打开$label目录',
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openDirectory(String path, String pathType) async {
+    try {
+      // 对于执行文件，打开其所在目录
+      String directoryPath;
+      if (pathType == '执行文件') {
+        directoryPath = path.substring(0, path.lastIndexOf('\\'));
+      } else {
+        // 对于存档路径，直接打开该目录
+        directoryPath = path;
+      }
+
+      // 使用 Windows 的 explorer 命令打开目录
+      await Process.run('explorer', [directoryPath]);
+    } catch (e) {
+      _showErrorDialog('打开目录失败: $e');
+    }
   }
 
   Widget _buildBackupSection() {

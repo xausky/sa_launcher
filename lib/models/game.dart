@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 class Game {
   final String id;
   final String title;
@@ -17,7 +15,18 @@ class Game {
     required this.createdAt,
   });
 
+  // 用于云同步的JSON（不包含路径信息）
   Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'coverImageFileName': coverImageFileName,
+      'createdAt': createdAt.millisecondsSinceEpoch,
+    };
+  }
+
+  // 用于本地存储的完整JSON（包含路径信息）
+  Map<String, dynamic> toLocalJson() {
     return {
       'id': id,
       'title': title,
@@ -28,14 +37,31 @@ class Game {
     };
   }
 
+  // 从完整JSON创建（包含路径信息）
   factory Game.fromJson(Map<String, dynamic> json) {
     return Game(
       id: json['id'],
       title: json['title'],
-      executablePath: json['executablePath'],
+      executablePath: json['executablePath'] ?? '',
       coverImageFileName: json['coverImageFileName'],
       saveDataPath: json['saveDataPath'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt']),
+    );
+  }
+
+  // 从云端JSON和本地路径数据合并创建
+  factory Game.fromCloudJsonWithLocalPaths(
+    Map<String, dynamic> cloudJson,
+    Map<String, String> localPaths,
+  ) {
+    final gameId = cloudJson['id'] as String;
+    return Game(
+      id: gameId,
+      title: cloudJson['title'],
+      executablePath: localPaths['${gameId}_executablePath'] ?? '',
+      coverImageFileName: cloudJson['coverImageFileName'],
+      saveDataPath: localPaths['${gameId}_saveDataPath'],
+      createdAt: DateTime.fromMillisecondsSinceEpoch(cloudJson['createdAt']),
     );
   }
 

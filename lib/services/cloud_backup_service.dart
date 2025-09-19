@@ -265,7 +265,10 @@ class CloudBackupService {
 
       final tempDir = Directory.systemTemp;
       final tempFile = File(
-        path.join(tempDir.path, 'temp_$_lastModifiedFileName'),
+        path.join(
+          tempDir.path,
+          '$_lastModifiedFileName-${DateTime.now().millisecondsSinceEpoch}',
+        ),
       );
 
       // 下载 lastModified 文件
@@ -837,6 +840,46 @@ class CloudBackupService {
       }
     } catch (e) {
       print('自动上传异常: $e');
+    }
+  }
+
+  // 检查云端是否有更新（用于启动时检查）
+  static Future<bool> hasCloudUpdates() async {
+    try {
+      // 检查是否配置了云同步
+      final isConfigured = await CloudSyncConfigService.isCloudSyncConfigured();
+      if (!isConfigured) {
+        return false;
+      }
+
+      final config = await CloudSyncConfigService.getCloudSyncConfig();
+      if (config == null) {
+        return false;
+      }
+
+      final minio = await _createMinioClient();
+      if (minio == null) {
+        return false;
+      }
+
+      final times = await _getLastModifiedTimes(
+        minio,
+        config.bucket,
+        config.objectPath,
+      );
+
+      final localTime = times['local'];
+      final cloudTime = times['cloud'];
+
+      // 如果云端时间比本地时间新，则有更新
+      if (localTime != null && cloudTime != null) {
+        return cloudTime.isAfter(localTime);
+      }
+
+      return false;
+    } catch (e) {
+      print('检查云端更新失败: $e');
+      return false;
     }
   }
 }

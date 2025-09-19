@@ -4,6 +4,7 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import '../models/game.dart';
 import '../models/save_backup.dart';
+import 'cloud_sync_config_service.dart';
 
 class AppDataService {
   static const String _appJsonFileName = 'app.json';
@@ -95,9 +96,19 @@ class AppDataService {
       final appData = await readAppData();
       final gamesJson = appData['games'] as List<dynamic>? ?? [];
 
-      return gamesJson
-          .map((json) => Game.fromJson(json as Map<String, dynamic>))
-          .toList();
+      // 获取本地路径数据
+      final gamePaths = await CloudSyncConfigService.getGamePaths();
+
+      return gamesJson.map((json) {
+        final gameData = json as Map<String, dynamic>;
+        // 如果JSON中没有路径信息，从本地路径数据中获取
+        if (!gameData.containsKey('executablePath')) {
+          return Game.fromCloudJsonWithLocalPaths(gameData, gamePaths);
+        } else {
+          // 如果JSON中有路径信息（旧格式），正常解析
+          return Game.fromJson(gameData);
+        }
+      }).toList();
     } catch (e) {
       print('获取游戏列表失败: $e');
       return [];
@@ -108,8 +119,19 @@ class AppDataService {
   static Future<void> saveGames(List<Game> games) async {
     try {
       final appData = await readAppData();
+      // 只保存云端数据（不包含路径）
       appData['games'] = games.map((game) => game.toJson()).toList();
       await writeAppData(appData);
+
+      // 分别保存路径数据到本地
+      final gamePaths = <String, String>{};
+      for (final game in games) {
+        gamePaths['${game.id}_executablePath'] = game.executablePath;
+        if (game.saveDataPath != null) {
+          gamePaths['${game.id}_saveDataPath'] = game.saveDataPath!;
+        }
+      }
+      await CloudSyncConfigService.setGamePaths(gamePaths);
     } catch (e) {
       print('保存游戏列表失败: $e');
     }
@@ -137,6 +159,9 @@ class AppDataService {
     final games = await getAllGames();
     games.removeWhere((game) => game.id == gameId);
     await saveGames(games);
+
+    // 同时删除本地路径数据
+    await CloudSyncConfigService.removeGamePaths(gameId);
   }
 
   // 从文件系统扫描获取所有备份

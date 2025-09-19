@@ -4,6 +4,7 @@ import '../models/game.dart';
 import '../models/save_backup.dart';
 import 'app_data_service.dart';
 import 'save_backup_service.dart';
+import 'cloud_backup_service.dart';
 
 // 备份检查结果
 class BackupCheckResult {
@@ -119,7 +120,7 @@ class AutoBackupService {
     try {
       // 如果存在旧的自动备份，先删除它
       if (oldAutoBackup != null) {
-        await SaveBackupService.deleteBackup(oldAutoBackup);
+        await SaveBackupService.deleteBackup(oldAutoBackup, autoUpload: false);
         debugPrint('删除旧的自动备份: ${oldAutoBackup.filePath}');
       }
 
@@ -191,6 +192,17 @@ class AutoBackupService {
     Game game,
   ) async {
     try {
+      // 检查云端是否有更新（在检查本地自动备份之前）
+      final hasCloudUpdates = await CloudBackupService.hasCloudUpdates();
+      if (hasCloudUpdates) {
+        debugPrint('游戏 ${game.title} 启动前检测到云端有更新，建议先同步云端数据');
+        // 可以返回一个特殊的结果，提示用户先同步云端
+        return BackupCheckResult(
+          shouldApply: false,
+          reason: '检测到云端有更新，建议先同步云端数据再启动游戏',
+        );
+      }
+
       // 检查游戏是否配置了存档路径
       if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
         return BackupCheckResult(shouldApply: false, reason: '未配置存档路径');

@@ -153,12 +153,20 @@ class SaveBackupService {
   }
 
   // 删除备份
-  static Future<bool> deleteBackup(SaveBackup backup) async {
+  static Future<bool> deleteBackup(
+    SaveBackup backup, {
+    bool autoUpload = true,
+  }) async {
     try {
       // 删除备份文件
       final backupFile = File(backup.filePath);
       if (await backupFile.exists()) {
         await backupFile.delete();
+      }
+
+      // 触发自动上传到云端
+      if (autoUpload) {
+        CloudBackupService.autoUploadToCloud();
       }
 
       return true;

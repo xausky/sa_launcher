@@ -6,15 +6,105 @@ import '../providers/game_provider.dart';
 import '../providers/game_process_provider.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
+import '../services/cloud_backup_service.dart';
 import 'add_game_page.dart';
 import 'game_detail_page.dart';
 import 'settings_page.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  @override
+  void initState() {
+    super.initState();
+    _checkForCloudUpdates();
+  }
+
+  // 检查云端更新
+  Future<void> _checkForCloudUpdates() async {
+    try {
+      final hasUpdates = await CloudBackupService.hasCloudUpdates();
+      if (hasUpdates && mounted) {
+        _showCloudUpdateDialog();
+      }
+    } catch (e) {
+      print('检查云端更新失败: $e');
+    }
+  }
+
+  // 显示云端更新对话框
+  void _showCloudUpdateDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('发现云端更新'),
+          content: const Text('检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('稍后'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _downloadFromCloud();
+              },
+              child: const Text('立即下载'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 从云端下载
+  Future<void> _downloadFromCloud() async {
+    try {
+      final result = await CloudBackupService.downloadFromCloud(
+        skipConfirmation: true,
+      );
+
+      if (result == CloudSyncResult.success) {
+        // 重新加载游戏列表
+        await ref.read(gameListProvider.notifier).loadGames();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('云端配置下载成功，游戏列表已更新'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else if (result != CloudSyncResult.noChanges) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '下载失败: ${CloudBackupService.getSyncResultMessage(result)}',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('下载失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final gameListAsync = ref.watch(gameListProvider);
 
     return Scaffold(

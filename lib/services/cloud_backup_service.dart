@@ -14,6 +14,7 @@ enum CloudSyncResult {
   downloadError,
   noChanges,
   fileNotFound,
+  needsConfirmation,
 }
 
 class CloudBackupService {
@@ -225,6 +226,21 @@ class CloudBackupService {
     }
   }
 
+  // 删除本地文件
+  static Future<bool> _deleteLocalFile(File file) async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
+        print('删除本地文件: ${file.path}');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('删除本地文件失败 ${file.path}: $e');
+      return false;
+    }
+  }
+
   // 创建 lastModified 文件
   static Future<File> _createLastModifiedFile(DateTime lastModified) async {
     final tempDir = Directory.systemTemp;
@@ -325,9 +341,54 @@ class CloudBackupService {
     return {'local': localTime, 'cloud': cloudTime};
   }
 
-  // 上传文件到云端
-  static Future<CloudSyncResult> uploadToCloud() async {
+  // 检查同步操作是否需要用户确认（旧覆盖新的情况）
+  static Future<bool> checkNeedsConfirmation({required bool isUpload}) async {
     try {
+      final config = await CloudSyncConfigService.getCloudSyncConfig();
+      if (config == null) return false;
+
+      final minio = await _createMinioClient();
+      if (minio == null) return false;
+
+      final times = await _getLastModifiedTimes(
+        minio,
+        config.bucket,
+        config.objectPath,
+      );
+
+      final localTime = times['local'];
+      final cloudTime = times['cloud'];
+
+      if (localTime == null || cloudTime == null) {
+        return false; // 如果任一时间不存在，不需要确认
+      }
+
+      if (isUpload) {
+        // 上传时：如果云端时间比本地时间新，需要确认
+        return cloudTime.isAfter(localTime);
+      } else {
+        // 下载时：如果本地时间比云端时间新，需要确认
+        return localTime.isAfter(cloudTime);
+      }
+    } catch (e) {
+      print('检查确认需求失败: $e');
+      return false;
+    }
+  }
+
+  // 上传文件到云端
+  static Future<CloudSyncResult> uploadToCloud({
+    bool skipConfirmation = false,
+  }) async {
+    try {
+      // 检查是否需要用户确认
+      if (!skipConfirmation) {
+        final needsConfirm = await checkNeedsConfirmation(isUpload: true);
+        if (needsConfirm) {
+          return CloudSyncResult.needsConfirmation;
+        }
+      }
+
       final config = await CloudSyncConfigService.getCloudSyncConfig();
       if (config == null) {
         return CloudSyncResult.noConfig;
@@ -476,8 +537,18 @@ class CloudBackupService {
   }
 
   // 从云端下载文件
-  static Future<CloudSyncResult> downloadFromCloud() async {
+  static Future<CloudSyncResult> downloadFromCloud({
+    bool skipConfirmation = false,
+  }) async {
     try {
+      // 检查是否需要用户确认
+      if (!skipConfirmation) {
+        final needsConfirm = await checkNeedsConfirmation(isUpload: false);
+        if (needsConfirm) {
+          return CloudSyncResult.needsConfirmation;
+        }
+      }
+
       final config = await CloudSyncConfigService.getCloudSyncConfig();
       if (config == null) {
         return CloudSyncResult.noConfig;
@@ -559,6 +630,34 @@ class CloudBackupService {
         }
       }
 
+      // 删除本地存在但云端不存在的文件
+      int deletedCount = 0;
+      final cloudObjectNames = <String>{};
+
+      // 收集所有云端文件对应的本地路径（排除 lastModified 文件）
+      for (final objectName in cloudFilesInfo.keys) {
+        if (!objectName.endsWith(_lastModifiedFileName)) {
+          cloudObjectNames.add(objectName);
+        }
+      }
+
+      // 检查本地文件，删除云端不存在的文件
+      final localFiles = await _getLocalFiles();
+      for (final fileInfo in localFiles) {
+        final relativePath = fileInfo['relativePath']!;
+        final objectName = config.objectPath.isEmpty
+            ? relativePath
+            : '${config.objectPath}/${relativePath.replaceAll('\\', '/')}';
+
+        if (!cloudObjectNames.contains(objectName)) {
+          final localFile = File(fileInfo['localPath']!);
+          final deleted = await _deleteLocalFile(localFile);
+          if (deleted) {
+            deletedCount++;
+          }
+        }
+      }
+
       // 读取云端的 lastModified 文件并设置本地文件时间
       try {
         final cloudLastModified = await _getCloudLastModifiedFromFile(
@@ -574,11 +673,11 @@ class CloudBackupService {
         print('设置本地文件时间失败: $e');
       }
 
-      if (downloadedCount == 0) {
+      if (downloadedCount == 0 && deletedCount == 0) {
         return CloudSyncResult.noChanges;
       }
 
-      print('成功从云端下载 $downloadedCount/$totalCount 个文件');
+      print('成功从云端下载 $downloadedCount/$totalCount 个文件，删除 $deletedCount 个多余文件');
       return CloudSyncResult.success;
     } catch (e) {
       print('从云端下载失败: $e');
@@ -706,6 +805,8 @@ class CloudBackupService {
         return '文件已是最新，无需同步';
       case CloudSyncResult.fileNotFound:
         return '文件未找到';
+      case CloudSyncResult.needsConfirmation:
+        return '需要用户确认';
     }
   }
 }

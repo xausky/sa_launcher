@@ -234,13 +234,15 @@ class AppDataService {
 
   // 生成备份文件名（使用base64编码的备份名称）
   static String generateBackupFileName(String backupName) {
-    return base64UrlEncode(utf8.encode(backupName));
+    return base64UrlEncode(utf8.encode(backupName)).replaceAll('=', '');
   }
 
   // 从备份文件名解码备份名称
   static String decodeBackupFileName(String fileName) {
     try {
-      final bytes = base64Decode(fileName.replaceAll('.zip', ''));
+      final bytes = base64Decode(
+        base64.normalize(fileName.replaceAll('.zip', '')),
+      );
       return utf8.decode(bytes);
     } catch (e) {
       print('解码备份文件名失败: $e');

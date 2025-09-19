@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/home_page.dart';
+import 'services/app_data_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +24,7 @@ void main() async {
       await windowManager.focus();
     });
   }
-
+  print('AppDataDirectory ${await AppDataService.getAppDataDirectory()}');
   runApp(const ProviderScope(child: GameLauncherApp()));
 }
 

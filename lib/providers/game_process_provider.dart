@@ -4,9 +4,11 @@ import '../models/game_process.dart';
 import '../services/game_process_manager.dart';
 
 // 游戏进程状态管理
-class GameProcessNotifier extends StateNotifier<Map<String, GameProcessInfo>> {
-  GameProcessNotifier() : super({}) {
+class GameProcessNotifier extends Notifier<Map<String, GameProcessInfo>> {
+  @override
+  Map<String, GameProcessInfo> build() {
     _startPeriodicUpdate();
+    return {};
   }
 
   Timer? _updateTimer;
@@ -42,19 +44,15 @@ class GameProcessNotifier extends StateNotifier<Map<String, GameProcessInfo>> {
     });
   }
 
-  @override
   void dispose() {
     _updateTimer?.cancel();
     _processManager.dispose();
-    super.dispose();
   }
 }
 
 // 游戏进程状态Provider
 final gameProcessProvider =
-    StateNotifierProvider<GameProcessNotifier, Map<String, GameProcessInfo>>((
-      ref,
-    ) {
+    NotifierProvider<GameProcessNotifier, Map<String, GameProcessInfo>>(() {
       return GameProcessNotifier();
     });
 

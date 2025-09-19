@@ -9,12 +9,14 @@ import 'cloud_backup_service.dart';
 // 备份检查结果
 class BackupCheckResult {
   final bool shouldApply;
+  final bool shouldSyncCloud;
   final DateTime? autoBackupTime;
   final DateTime? saveDataTime;
   final String reason;
 
   BackupCheckResult({
     required this.shouldApply,
+    required this.shouldSyncCloud,
     this.autoBackupTime,
     this.saveDataTime,
     required this.reason,
@@ -181,12 +183,6 @@ class AutoBackupService {
     }
   }
 
-  // 检查游戏启动前是否需要应用自动备份
-  static Future<bool> shouldApplyAutoBackupBeforeLaunch(Game game) async {
-    final result = await checkAutoBackupBeforeLaunch(game);
-    return result.shouldApply;
-  }
-
   // 详细检查游戏启动前是否需要应用自动备份
   static Future<BackupCheckResult> checkAutoBackupBeforeLaunch(
     Game game,
@@ -194,24 +190,24 @@ class AutoBackupService {
     try {
       // 检查云端是否有更新（在检查本地自动备份之前）
       final hasCloudUpdates = await CloudBackupService.hasCloudUpdates();
-      if (hasCloudUpdates) {
-        debugPrint('游戏 ${game.title} 启动前检测到云端有更新，建议先同步云端数据');
-        // 可以返回一个特殊的结果，提示用户先同步云端
-        return BackupCheckResult(
-          shouldApply: false,
-          reason: '检测到云端有更新，建议先同步云端数据再启动游戏',
-        );
-      }
 
       // 检查游戏是否配置了存档路径
       if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
-        return BackupCheckResult(shouldApply: false, reason: '未配置存档路径');
+        return BackupCheckResult(
+          shouldApply: false,
+          shouldSyncCloud: hasCloudUpdates,
+          reason: '未配置存档路径',
+        );
       }
 
       // 获取当前的自动备份
       final autoBackup = await _getCurrentAutoBackup(game.id);
       if (autoBackup == null) {
-        return BackupCheckResult(shouldApply: false, reason: '没有可用的自动备份');
+        return BackupCheckResult(
+          shouldApply: false,
+          shouldSyncCloud: hasCloudUpdates,
+          reason: '没有可用的自动备份',
+        );
       }
 
       final saveDataDir = Directory(game.saveDataPath!);
@@ -223,6 +219,7 @@ class AutoBackupService {
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
           saveDataTime: null,
+          shouldSyncCloud: hasCloudUpdates,
           reason: '存档目录不存在',
         );
       }
@@ -237,6 +234,7 @@ class AutoBackupService {
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
           saveDataTime: null,
+          shouldSyncCloud: hasCloudUpdates,
           reason: '存档目录为空',
         );
       }
@@ -257,6 +255,7 @@ class AutoBackupService {
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
           saveDataTime: latestModifyTime,
+          shouldSyncCloud: hasCloudUpdates,
           reason: '自动备份更新（相差${minutesDifference}分钟）',
         );
       }
@@ -265,11 +264,16 @@ class AutoBackupService {
         shouldApply: false,
         autoBackupTime: autoBackup.createdAt,
         saveDataTime: latestModifyTime,
+        shouldSyncCloud: hasCloudUpdates,
         reason: '当前存档已是最新',
       );
     } catch (e) {
       debugPrint('检查启动前备份应用失败: $e');
-      return BackupCheckResult(shouldApply: false, reason: '检查失败: $e');
+      return BackupCheckResult(
+        shouldApply: false,
+        shouldSyncCloud: false,
+        reason: '检查失败: $e',
+      );
     }
   }
 

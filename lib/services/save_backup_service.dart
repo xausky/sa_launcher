@@ -43,7 +43,7 @@ class SaveBackupService {
       await _addDirectoryToArchive(archive, saveDir, '');
 
       final bytes = ZipEncoder().encode(archive);
-      if (bytes != null) {
+      if (bytes.isNotEmpty) {
         final backupFile = File(backupFilePath);
         await backupFile.writeAsBytes(bytes);
 

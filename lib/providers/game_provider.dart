@@ -5,9 +5,10 @@ import '../services/game_storage.dart';
 import '../services/cloud_backup_service.dart';
 
 // 游戏列表状态管理
-class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
-  GameListNotifier() : super(const AsyncValue.loading()) {
-    loadGames();
+class GameListNotifier extends AsyncNotifier<List<Game>> {
+  @override
+  Future<List<Game>> build() async {
+    return await GameStorage.getGames();
   }
 
   // 加载游戏列表
@@ -79,10 +80,11 @@ class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
 }
 
 // 游戏列表Provider
-final gameListProvider =
-    StateNotifierProvider<GameListNotifier, AsyncValue<List<Game>>>((ref) {
-      return GameListNotifier();
-    });
+final gameListProvider = AsyncNotifierProvider<GameListNotifier, List<Game>>(
+  () {
+    return GameListNotifier();
+  },
+);
 
 // 获取特定游戏的Provider
 final gameByIdProvider = Provider.family<Game?, String>((ref, gameId) {

@@ -208,9 +208,23 @@ class _HomePageState extends ConsumerState<HomePage> {
   ) async {
     try {
       // 检查是否需要应用自动备份
-      final checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
+      var checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
         game,
       );
+
+      if (checkResult.shouldSyncCloud) {
+        final shouldApply = await _showSyncCloudDialog(
+          context,
+          game,
+          checkResult,
+        );
+        if (shouldApply == true) {
+          await CloudBackupService.downloadFromCloud(skipConfirmation: true);
+          checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
+            game,
+          );
+        }
+      }
 
       if (checkResult.shouldApply) {
         final shouldApply = await _showAutoBackupDialog(
@@ -238,6 +252,30 @@ class _HomePageState extends ConsumerState<HomePage> {
     } catch (e) {
       _showErrorDialog(context, '启动游戏失败: $e');
     }
+  }
+
+  Future<bool?> _showSyncCloudDialog(
+    context,
+    Game game,
+    BackupCheckResult checkResult,
+  ) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('发现云端更新'),
+        content: const Text('检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('不需要同步'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('下载最新版本'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _addGame(BuildContext context, WidgetRef ref) async {

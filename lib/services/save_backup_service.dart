@@ -27,12 +27,14 @@ class SaveBackupService {
         game.title,
       );
 
-      final backupId = DateTime.now().millisecondsSinceEpoch.toString();
+      final createdAt = DateTime.now();
+      final backupId = createdAt.millisecondsSinceEpoch.toString();
 
-      // 对于自动备份，直接使用 auto.zip，其他备份使用base64编码
-      final backupFileName = backupName == 'auto'
-          ? 'auto.zip'
-          : '${AppDataService.generateBackupFileName(backupName)}.zip';
+      // 使用新的文件名格式，包含创建时间
+      final backupFileName = AppDataService.generateBackupFileName(
+        backupName,
+        createdAt,
+      );
       final backupFilePath = path.join(gameBackupDir.path, backupFileName);
 
       // 创建ZIP压缩包
@@ -49,7 +51,7 @@ class SaveBackupService {
           gameId: gameId,
           name: backupName,
           filePath: backupFilePath,
-          createdAt: DateTime.now(),
+          createdAt: createdAt,
           fileSize: bytes.length,
         );
 

@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import '../models/game.dart';
@@ -155,17 +154,17 @@ class AppDataService {
           await for (final backupFile in gameDir.list()) {
             if (backupFile is File && backupFile.path.endsWith('.zip')) {
               try {
-                final fileName = path.basenameWithoutExtension(backupFile.path);
-
-                // 对于 auto.zip 文件，直接使用 'auto' 作为备份名称
-                final backupName = fileName == 'auto'
-                    ? 'auto'
-                    : decodeBackupFileName(fileName);
+                final fileName = path.basename(backupFile.path);
                 final stat = await backupFile.stat();
 
-                // 从文件名生成备份ID（使用文件修改时间的毫秒数）
-                final backupId = stat.modified.millisecondsSinceEpoch
-                    .toString();
+                // 解码文件名获取备份名称和创建时间
+                final decodedInfo = decodeBackupFileName(fileName);
+                final backupName = decodedInfo['name'] as String;
+                final createdAt =
+                    (decodedInfo['createdAt'] as DateTime?) ?? stat.modified;
+
+                // 生成备份ID（使用创建时间的毫秒数）
+                final backupId = createdAt.millisecondsSinceEpoch.toString();
 
                 // 需要根据游戏标题找到对应的游戏ID
                 final games = await getAllGames();
@@ -182,7 +181,7 @@ class AppDataService {
                     gameId: game.id,
                     name: backupName,
                     filePath: backupFile.path,
-                    createdAt: stat.modified,
+                    createdAt: createdAt,
                     fileSize: stat.size,
                   );
                   backups.add(backup);
@@ -232,21 +231,86 @@ class AppDataService {
     return settings[key] as T? ?? defaultValue;
   }
 
-  // 生成备份文件名（使用base64编码的备份名称）
-  static String generateBackupFileName(String backupName) {
-    return base64UrlEncode(utf8.encode(backupName)).replaceAll('=', '');
+  // 生成备份文件名（格式：<备份名base64Url去除=>-<备份创建时间>.zip）
+  static String generateBackupFileName(String backupName, DateTime createdAt) {
+    if (backupName == 'auto') {
+      // 自动备份格式：auto-<备份创建时间>.zip
+      final timeString = _formatBackupTime(createdAt);
+      return 'auto-$timeString.zip';
+    } else {
+      // 普通备份格式：<备份名base64Url去除=>-<备份创建时间>.zip
+      final encodedName = base64UrlEncode(
+        utf8.encode(backupName),
+      ).replaceAll('=', '');
+      final timeString = _formatBackupTime(createdAt);
+      return '$encodedName-$timeString.zip';
+    }
   }
 
-  // 从备份文件名解码备份名称
-  static String decodeBackupFileName(String fileName) {
+  // 格式化备份时间为文件名格式（yyyyMMddHHmmss）
+  static String _formatBackupTime(DateTime dateTime) {
+    return '${dateTime.year}'
+        '${dateTime.month.toString().padLeft(2, '0')}'
+        '${dateTime.day.toString().padLeft(2, '0')}'
+        '${dateTime.hour.toString().padLeft(2, '0')}'
+        '${dateTime.minute.toString().padLeft(2, '0')}'
+        '${dateTime.second.toString().padLeft(2, '0')}';
+  }
+
+  // 从备份文件名解码备份名称和创建时间
+  static Map<String, dynamic> decodeBackupFileName(String fileName) {
     try {
-      final bytes = base64Decode(
-        base64.normalize(fileName.replaceAll('.zip', '')),
-      );
-      return utf8.decode(bytes);
+      // 移除 .zip 扩展名
+      final nameWithoutExt = fileName.replaceAll('.zip', '');
+
+      if (nameWithoutExt.startsWith('auto-')) {
+        // 自动备份格式：auto-<时间>
+        final timeString = nameWithoutExt.substring(5); // 移除 'auto-'
+        final createdAt = _parseBackupTime(timeString);
+        return {'name': 'auto', 'createdAt': createdAt};
+      } else {
+        // 普通备份格式：<base64名称>-<时间>
+        final lastDashIndex = nameWithoutExt.lastIndexOf('-');
+        if (lastDashIndex == -1 || lastDashIndex == nameWithoutExt.length - 1) {
+          // 如果没有找到分隔符，可能是旧格式，尝试直接解码
+          final bytes = base64Decode(base64.normalize(nameWithoutExt));
+          return {
+            'name': utf8.decode(bytes),
+            'createdAt': null, // 旧格式没有时间信息
+          };
+        }
+
+        final encodedName = nameWithoutExt.substring(0, lastDashIndex);
+        final timeString = nameWithoutExt.substring(lastDashIndex + 1);
+
+        final bytes = base64Decode(base64.normalize(encodedName));
+        final backupName = utf8.decode(bytes);
+        final createdAt = _parseBackupTime(timeString);
+
+        return {'name': backupName, 'createdAt': createdAt};
+      }
     } catch (e) {
       print('解码备份文件名失败: $e');
-      return fileName;
+      return {'name': fileName, 'createdAt': null};
+    }
+  }
+
+  // 解析备份时间字符串（yyyyMMddHHmmss）
+  static DateTime? _parseBackupTime(String timeString) {
+    try {
+      if (timeString.length != 14) return null;
+
+      final year = int.parse(timeString.substring(0, 4));
+      final month = int.parse(timeString.substring(4, 6));
+      final day = int.parse(timeString.substring(6, 8));
+      final hour = int.parse(timeString.substring(8, 10));
+      final minute = int.parse(timeString.substring(10, 12));
+      final second = int.parse(timeString.substring(12, 14));
+
+      return DateTime(year, month, day, hour, minute, second);
+    } catch (e) {
+      print('解析备份时间失败: $e');
+      return null;
     }
   }
 

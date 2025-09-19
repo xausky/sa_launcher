@@ -56,13 +56,17 @@ class CloudBackupService {
       return true;
     }
 
-    final localStat = await localFile.stat();
-    final localModified = localStat.modified;
-    final localSize = localStat.size;
-
-    // 如果时间差超过1分钟或大小不同，则需要同步
-    final timeDiff = localModified.difference(remoteLastModified).abs();
-    return timeDiff.inMinutes > 1 || localSize != remoteSize;
+    if (localFile.path.endsWith('/app.json')) {
+      final localStat = await localFile.stat();
+      final localModified = localStat.modified;
+      final localSize = localStat.size;
+      final timeDiff = localModified.difference(remoteLastModified).abs();
+      return timeDiff.inMinutes > 1 || localSize != remoteSize;
+    } else {
+      final localStat = await localFile.stat();
+      final localSize = localStat.size;
+      return localSize != remoteSize;
+    }
   }
 
   // 上传单个文件
@@ -203,6 +207,22 @@ class CloudBackupService {
       print('获取云端文件信息失败: $e');
     }
     return filesInfo;
+  }
+
+  // 删除云端文件
+  static Future<bool> _deleteCloudFile(
+    Minio minio,
+    String bucket,
+    String objectName,
+  ) async {
+    try {
+      await minio.removeObject(bucket, objectName);
+      print('删除云端文件: $objectName');
+      return true;
+    } catch (e) {
+      print('删除云端文件失败 $objectName: $e');
+      return false;
+    }
   }
 
   // 创建 lastModified 文件
@@ -386,13 +406,43 @@ class CloudBackupService {
         }
       }
 
+      // 删除云端存在但本地不存在的文件
+      int deletedCount = 0;
+      final localObjectNames = <String>{};
+
+      // 收集所有本地文件对应的云端对象名称
+      for (final fileInfo in localFiles) {
+        final relativePath = fileInfo['relativePath']!;
+        final objectName = config.objectPath.isEmpty
+            ? relativePath
+            : '${config.objectPath}/${relativePath.replaceAll('\\', '/')}';
+        localObjectNames.add(objectName);
+      }
+
+      // 添加 lastModified 文件到本地文件集合
+      final lastModifiedObjectName = config.objectPath.isEmpty
+          ? _lastModifiedFileName
+          : '${config.objectPath}/$_lastModifiedFileName';
+      localObjectNames.add(lastModifiedObjectName);
+
+      // 删除云端多余的文件
+      for (final cloudObjectName in cloudFilesInfo.keys) {
+        if (!localObjectNames.contains(cloudObjectName)) {
+          final deleted = await _deleteCloudFile(
+            minio,
+            config.bucket,
+            cloudObjectName,
+          );
+          if (deleted) {
+            deletedCount++;
+          }
+        }
+      }
+
       // 上传 lastModified 文件
       File? lastModifiedFile;
       try {
         lastModifiedFile = await _createLastModifiedFile(latestModified);
-        final lastModifiedObjectName = config.objectPath.isEmpty
-            ? _lastModifiedFileName
-            : '${config.objectPath}/$_lastModifiedFileName';
 
         await minio.fPutObject(
           config.bucket,
@@ -409,11 +459,11 @@ class CloudBackupService {
         }
       }
 
-      if (uploadedCount == 0) {
+      if (uploadedCount == 0 && deletedCount == 0) {
         return CloudSyncResult.noChanges;
       }
 
-      print('成功上传 $uploadedCount/$totalCount 个文件到云端');
+      print('成功上传 $uploadedCount/$totalCount 个文件，删除 $deletedCount 个多余文件');
       return CloudSyncResult.success;
     } catch (e) {
       print('上传到云端失败: $e');

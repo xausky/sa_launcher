@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../models/game.dart';
 import '../models/save_backup.dart';
 import '../services/save_backup_service.dart';
@@ -587,7 +588,6 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
-        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return DateFormat('yyyy-MM-dd HH:mm:ss').format(dateTime);
   }
 }

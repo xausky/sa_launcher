@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import '../models/save_backup.dart';
 import 'app_data_service.dart';
+import 'cloud_backup_service.dart';
 
 class SaveBackupService {
   // 创建存档备份
@@ -56,6 +57,9 @@ class SaveBackupService {
         );
 
         debugPrint('创建备份: $backupFilePath');
+
+        // 触发自动上传到云端
+        CloudBackupService.autoUploadToCloud();
 
         return backup;
       }

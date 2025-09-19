@@ -14,6 +14,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _autoBackupEnabled = false;
+  bool _autoSyncEnabled = false;
   bool _isLoading = true;
 
   // 云同步相关状态
@@ -39,9 +40,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     try {
       final settings = await AppDataService.getSettings();
       final cloudConfig = await CloudSyncConfigService.getCloudSyncConfig();
+      final autoSyncEnabled = await CloudSyncConfigService.getAutoSyncEnabled();
 
       setState(() {
         _autoBackupEnabled = settings['autoBackupEnabled'] as bool? ?? false;
+        _autoSyncEnabled = autoSyncEnabled;
         _isCloudConfigured = cloudConfig != null;
         if (cloudConfig != null) {
           _cloudUrlController.text = cloudConfig.toString();
@@ -82,6 +85,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             content: Text('保存设置失败: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  // 保存自动同步设置
+  Future<void> _saveAutoSyncSetting(bool enabled) async {
+    try {
+      await CloudSyncConfigService.setAutoSyncEnabled(enabled);
+      setState(() {
+        _autoSyncEnabled = enabled;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(enabled ? '自动云同步已启用' : '自动云同步已关闭'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('保存自动同步设置失败: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -526,6 +557,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                           const SizedBox(height: 16),
 
+                          // 自动同步开关
+                          SwitchListTile(
+                            title: const Text('自动云同步'),
+                            subtitle: const Text('启用后，在创建备份或修改游戏配置时自动上传到云端'),
+                            value: _autoSyncEnabled,
+                            onChanged: _isCloudConfigured
+                                ? (value) => _saveAutoSyncSetting(value)
+                                : null,
+                          ),
+
+                          const SizedBox(height: 16),
+
                           // 说明信息
                           Container(
                             padding: const EdgeInsets.all(12),
@@ -555,8 +598,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 const SizedBox(height: 8),
                                 const Text(
                                   '• 云同步会备份应用配置文件 (app.json)、游戏封面 (covers) 和存档备份 (backups)\n'
-                                  '• 所有文件会打包成压缩包上传，确保数据完整性\n'
-                                  '• 同步时会比较本地和云端文件的最后修改时间，只有差异超过1分钟才会同步\n'
+                                  '• 同步时会比较本地和云端文件的最后修改时间和大小，确保数据一致性\n'
+                                  '• 自动同步功能会在创建备份或修改游戏配置时自动上传到云端\n'
                                   '• 云同步配置保存在 local.json 中，不会被同步到其他设备',
                                   style: TextStyle(fontSize: 14),
                                 ),

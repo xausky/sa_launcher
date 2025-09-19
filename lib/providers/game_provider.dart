@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/game.dart';
 import '../services/game_storage.dart';
+import '../services/cloud_backup_service.dart';
 
 // 游戏列表状态管理
 class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
@@ -25,6 +26,9 @@ class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
     try {
       await GameStorage.addGame(game);
       await loadGames(); // 重新加载列表
+
+      // 触发自动上传到云端
+      CloudBackupService.autoUploadToCloud();
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }
@@ -36,6 +40,9 @@ class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
       debugPrint('updateGame: ${updatedGame.toJson()}');
       await GameStorage.updateGame(updatedGame);
       await loadGames(); // 重新加载列表
+
+      // 触发自动上传到云端
+      CloudBackupService.autoUploadToCloud();
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }
@@ -57,6 +64,9 @@ class GameListNotifier extends StateNotifier<AsyncValue<List<Game>>> {
 
       await GameStorage.deleteGame(gameId);
       await loadGames(); // 重新加载列表
+
+      // 触发自动上传到云端
+      CloudBackupService.autoUploadToCloud();
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }

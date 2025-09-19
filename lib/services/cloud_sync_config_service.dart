@@ -184,4 +184,26 @@ class CloudSyncConfigService {
   static Future<void> clearCloudSyncConfig() async {
     await saveCloudSyncConfig(null);
   }
+
+  // 获取自动同步配置
+  static Future<bool> getAutoSyncEnabled() async {
+    try {
+      final localConfig = await _readLocalConfig();
+      return localConfig['autoSync'] as bool? ?? false;
+    } catch (e) {
+      print('获取自动同步配置失败: $e');
+      return false;
+    }
+  }
+
+  // 设置自动同步配置
+  static Future<void> setAutoSyncEnabled(bool enabled) async {
+    try {
+      final localConfig = await _readLocalConfig();
+      localConfig['autoSync'] = enabled;
+      await _writeLocalConfig(localConfig);
+    } catch (e) {
+      print('设置自动同步配置失败: $e');
+    }
+  }
 }

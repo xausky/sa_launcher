@@ -809,4 +809,34 @@ class CloudBackupService {
         return '需要用户确认';
     }
   }
+
+  // 自动上传到云端（静默模式，不显示确认对话框）
+  static Future<void> autoUploadToCloud() async {
+    try {
+      // 检查是否启用了自动同步
+      final autoSyncEnabled = await CloudSyncConfigService.getAutoSyncEnabled();
+      if (!autoSyncEnabled) {
+        return;
+      }
+
+      // 检查是否配置了云同步
+      final isConfigured = await CloudSyncConfigService.isCloudSyncConfigured();
+      if (!isConfigured) {
+        return;
+      }
+
+      print('开始自动上传到云端...');
+
+      // 静默上传，跳过确认检查
+      final result = await uploadToCloud(skipConfirmation: true);
+
+      if (result == CloudSyncResult.success) {
+        print('自动上传成功');
+      } else if (result != CloudSyncResult.noChanges) {
+        print('自动上传失败: ${getSyncResultMessage(result)}');
+      }
+    } catch (e) {
+      print('自动上传异常: $e');
+    }
+  }
 }

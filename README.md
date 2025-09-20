@@ -48,20 +48,11 @@ SA Launcher 是一款功能强大的游戏启动器，使用 Flutter 开发，�
 - ✅ MinIO
 - ✅ 其他 S3 兼容服务
 
-## 快速开始
+## 截图
 
-### 环境要求
-- Flutter 3.9+
-- Dart SDK
-
-### 安装运行
-```bash
-# 安装依赖
-flutter pub get
-
-# 运行应用
-flutter run -d windows
-```
+![](https://i.imgur.com/Ylzk3EH.png)
+![](https://i.imgur.com/bXa6wiz.png)
+![](https://i.imgur.com/r0Uitnt.png)
 
 ## 技术架构
 

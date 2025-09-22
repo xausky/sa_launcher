@@ -35,6 +35,7 @@ class GameLauncherApp extends StatelessWidget {
     return MaterialApp(
       title: '游戏启动器',
       theme: ThemeData(
+        fontFamily: 'Noto Sans SC',
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),

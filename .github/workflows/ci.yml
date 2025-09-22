@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Check Out Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+  build-windows:
+    runs-on: windows-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Check Out Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Build Windows
+        run: flutter build windows
+
+      - name: Set short SHA
+        id: short_sha
+        run: echo "SHORT_SHA=$(git log --oneline | head -n 1 | awk '{ print $1 }')" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Get tag name
+        id: tag_name
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload Windows Build
+        uses: actions/upload-artifact@v4
+        with:
+          name: sa-launcher-windows-${{ steps.tag_name.outputs.TAG_NAME }}-${{ steps.short_sha.outputs.SHORT_SHA }}
+          path: build/windows/x64/runner/Release/*

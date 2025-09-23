@@ -1,7 +1,7 @@
 name: sa_launcher
 description: "A Game Launche, support auto backup and cloud sync."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0
 
 environment:
   sdk: ^3.9.0

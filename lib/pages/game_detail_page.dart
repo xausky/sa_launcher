@@ -8,6 +8,7 @@ import '../services/save_backup_service.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
 import '../providers/game_process_provider.dart';
+import '../providers/game_provider.dart';
 import 'add_game_page.dart';
 
 class GameDetailPage extends ConsumerStatefulWidget {
@@ -280,6 +281,10 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
                 children: [
                   // 游戏基本信息
                   _buildGameInfo(isRunning, processId),
+                  const SizedBox(height: 24),
+
+                  // 游戏统计信息
+                  _buildStatsSection(),
                   const SizedBox(height: 24),
 
                   // 存档备份管理
@@ -639,6 +644,192 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildStatsSection() {
+    return Consumer(
+      builder: (context, ref, child) {
+        // 获取最新的游戏数据
+        final gamesAsyncValue = ref.watch(gameListProvider);
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '游戏统计',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+
+                gamesAsyncValue.when(
+                  data: (games) {
+                    final game = games.firstWhere(
+                      (g) => g.id == widget.game.id,
+                      orElse: () => widget.game,
+                    );
+                    return _buildStatsContent(game);
+                  },
+                  loading: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                  error: (error, stackTrace) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        '加载统计数据失败: $error',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStatsContent(Game game) {
+    if (game.playCount == 0) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: const Center(
+          child: Column(
+            children: [
+              Icon(Icons.analytics_outlined, size: 48, color: Colors.grey),
+              SizedBox(height: 8),
+              Text(
+                '还没有游戏统计数据',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+              Text(
+                '开始游戏后将自动记录游戏时长',
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.schedule,
+                title: '总游戏时长',
+                value: game.formattedTotalPlaytime,
+                color: Colors.blue,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.play_circle,
+                title: '游戏次数',
+                value: '${game.playCount}次',
+                color: Colors.green,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.access_time,
+                title: '最后游玩',
+                value: game.formattedLastPlayedAt,
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildStatCard(
+                icon: Icons.trending_up,
+                title: '平均时长',
+                value: game.playCount > 0
+                    ? _formatDuration(
+                        Duration(
+                          seconds:
+                              game.totalPlaytime.inSeconds ~/ game.playCount,
+                        ),
+                      )
+                    : '0分钟',
+                color: Colors.purple,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+
+    if (hours > 0) {
+      return '$hours小时$minutes分钟';
+    } else {
+      return '$minutes分钟';
+    }
   }
 
   String _formatDateTime(DateTime dateTime) {

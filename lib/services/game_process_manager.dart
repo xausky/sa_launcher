@@ -89,8 +89,8 @@ class GameProcessManager {
         final isRunning = await _isProcessRunning(gameInfo.processId);
 
         if (!isRunning) {
-          // 进程已结束，触发自动备份检查
-          _onGameEnded(gameId);
+          // 进程已结束，记录游戏时长并触发自动备份检查
+          await _onGameEnded(gameId, gameInfo);
           // 移除游戏
           gamesToRemove.add(gameId);
         }
@@ -153,6 +153,13 @@ class GameProcessManager {
         ]);
       }
 
+      // 记录游戏时长统计（手动终止也要记录）
+      try {
+        await _recordPlaySession(gameId, gameInfo.startTime, DateTime.now());
+      } catch (e) {
+        print('记录游戏时长失败: $e');
+      }
+
       _runningGames.remove(gameId);
       return true;
     } catch (e) {
@@ -162,9 +169,18 @@ class GameProcessManager {
   }
 
   // 游戏结束时的处理
-  void _onGameEnded(String gameId) {
-    // 异步处理自动备份，不阻塞进程监控
-    _handleAutoBackup(gameId);
+  Future<void> _onGameEnded(String gameId, GameProcessInfo gameInfo) async {
+    try {
+      // 记录游戏时长统计
+      await _recordPlaySession(gameId, gameInfo.startTime, DateTime.now());
+
+      // 异步处理自动备份，不阻塞进程监控
+      _handleAutoBackup(gameId);
+    } catch (e) {
+      print('处理游戏结束事件失败: $e');
+      // 即使统计失败，也要继续处理自动备份
+      _handleAutoBackup(gameId);
+    }
   }
 
   // 自动备份消息回调
@@ -208,6 +224,37 @@ class GameProcessManager {
       if (_autoBackupCallback != null) {
         _autoBackupCallback!('自动备份失败: $e', false);
       }
+    }
+  }
+
+  // 记录游戏会话
+  Future<void> _recordPlaySession(
+    String gameId,
+    DateTime startTime,
+    DateTime endTime,
+  ) async {
+    try {
+      final sessionDuration = endTime.difference(startTime);
+
+      // 如果游戏时长少于30秒，可能是启动失败或误操作，不记录
+      if (sessionDuration.inSeconds < 30) {
+        return;
+      }
+
+      // 获取当前游戏列表
+      final games = await AppDataService.getAllGames();
+      final gameIndex = games.indexWhere((g) => g.id == gameId);
+
+      if (gameIndex != -1) {
+        // 更新游戏统计
+        final updatedGame = games[gameIndex].addPlaySession(sessionDuration);
+        games[gameIndex] = updatedGame;
+
+        // 保存更新后的游戏列表
+        await AppDataService.saveGames(games);
+      }
+    } catch (e) {
+      print('记录游戏会话失败: $e');
     }
   }
 

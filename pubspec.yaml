@@ -37,6 +37,9 @@ dependencies:
   # S3 云存储客户端
   minio: ^3.5.8
 
+  # 国际化和日期格式化
+  intl: ^0.20.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

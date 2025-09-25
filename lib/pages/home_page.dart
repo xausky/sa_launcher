@@ -626,7 +626,7 @@ class _GameCardState extends ConsumerState<GameCard> {
               ),
             ),
 
-            // 游戏标题（浮动在封面底部）
+            // 游戏标题和统计信息（浮动在封面底部）
             Positioned(
               left: 0,
               right: 0,
@@ -636,13 +636,16 @@ class _GameCardState extends ConsumerState<GameCard> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.8),
+                    ],
                   ),
                   borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(12),
                   ),
                 ),
-                padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+                padding: const EdgeInsets.fromLTRB(12, 32, 12, 12),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -664,27 +667,10 @@ class _GameCardState extends ConsumerState<GameCard> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (isRunning) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          'PID: $processId',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 4),
+
+                    // 游戏统计信息
+                    _buildGameStatsInfo(widget.game, isRunning, processId),
                   ],
                 ),
               ),
@@ -695,7 +681,7 @@ class _GameCardState extends ConsumerState<GameCard> {
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.black.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -762,6 +748,50 @@ class _GameCardState extends ConsumerState<GameCard> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGameStatsInfo(Game game, bool isRunning, int? processId) {
+    if (isRunning) {
+      return _buildRunningInfo(processId);
+    }
+
+    if (game.playCount == 0) {
+      return const Text(
+        '从未游玩',
+        style: TextStyle(fontSize: 10, color: Colors.white70),
+      );
+    }
+
+    return Column(
+      children: [
+        Text(
+          '游玩时长: ${game.formattedTotalPlaytime}',
+          style: const TextStyle(fontSize: 10, color: Colors.white70),
+        ),
+        Text(
+          '最后游玩: ${game.formattedLastPlayedAt}',
+          style: const TextStyle(fontSize: 10, color: Colors.white70),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRunningInfo(int? processId) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.green,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'PID: $processId',
+        style: const TextStyle(
+          fontSize: 10,
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

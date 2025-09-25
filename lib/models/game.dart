@@ -6,6 +6,11 @@ class Game {
   final String? saveDataPath;
   final DateTime createdAt;
 
+  // 游戏统计字段
+  final Duration totalPlaytime;
+  final DateTime? lastPlayedAt;
+  final int playCount;
+
   Game({
     required this.id,
     required this.title,
@@ -13,6 +18,9 @@ class Game {
     this.coverImageFileName,
     this.saveDataPath,
     required this.createdAt,
+    this.totalPlaytime = Duration.zero,
+    this.lastPlayedAt,
+    this.playCount = 0,
   });
 
   // 用于云同步的JSON（不包含路径信息）
@@ -22,6 +30,9 @@ class Game {
       'title': title,
       'coverImageFileName': coverImageFileName,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      'totalPlaytimeSeconds': totalPlaytime.inSeconds,
+      'lastPlayedAt': lastPlayedAt?.millisecondsSinceEpoch,
+      'playCount': playCount,
     };
   }
 
@@ -34,6 +45,9 @@ class Game {
       'coverImageFileName': coverImageFileName,
       'saveDataPath': saveDataPath,
       'createdAt': createdAt.millisecondsSinceEpoch,
+      'totalPlaytimeSeconds': totalPlaytime.inSeconds,
+      'lastPlayedAt': lastPlayedAt?.millisecondsSinceEpoch,
+      'playCount': playCount,
     };
   }
 
@@ -46,6 +60,11 @@ class Game {
       coverImageFileName: json['coverImageFileName'],
       saveDataPath: json['saveDataPath'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt']),
+      totalPlaytime: Duration(seconds: json['totalPlaytimeSeconds'] ?? 0),
+      lastPlayedAt: json['lastPlayedAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(json['lastPlayedAt'])
+          : null,
+      playCount: json['playCount'] ?? 0,
     );
   }
 
@@ -62,6 +81,11 @@ class Game {
       coverImageFileName: cloudJson['coverImageFileName'],
       saveDataPath: localPaths['${gameId}_saveDataPath'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(cloudJson['createdAt']),
+      totalPlaytime: Duration(seconds: cloudJson['totalPlaytimeSeconds'] ?? 0),
+      lastPlayedAt: cloudJson['lastPlayedAt'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(cloudJson['lastPlayedAt'])
+          : null,
+      playCount: cloudJson['playCount'] ?? 0,
     );
   }
 
@@ -72,6 +96,9 @@ class Game {
     String? coverImageFileName,
     String? saveDataPath,
     DateTime? createdAt,
+    Duration? totalPlaytime,
+    DateTime? lastPlayedAt,
+    int? playCount,
   }) {
     return Game(
       id: id ?? this.id,
@@ -80,6 +107,49 @@ class Game {
       coverImageFileName: coverImageFileName ?? this.coverImageFileName,
       saveDataPath: saveDataPath ?? this.saveDataPath,
       createdAt: createdAt ?? this.createdAt,
+      totalPlaytime: totalPlaytime ?? this.totalPlaytime,
+      lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
+      playCount: playCount ?? this.playCount,
+    );
+  }
+
+  // 获取格式化的总游戏时长
+  String get formattedTotalPlaytime {
+    final hours = totalPlaytime.inHours;
+    final minutes = totalPlaytime.inMinutes % 60;
+
+    if (hours > 0) {
+      return '$hours小时$minutes分钟';
+    } else {
+      return '$minutes分钟';
+    }
+  }
+
+  // 获取格式化的最后游玩时间
+  String get formattedLastPlayedAt {
+    if (lastPlayedAt == null) return '从未游玩';
+
+    final now = DateTime.now();
+    final difference = now.difference(lastPlayedAt!);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}天前';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}小时前';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}分钟前';
+    } else {
+      return '刚刚';
+    }
+  }
+
+  // 添加游戏会话
+  Game addPlaySession(Duration sessionDuration) {
+    final now = DateTime.now();
+    return copyWith(
+      totalPlaytime: totalPlaytime + sessionDuration,
+      lastPlayedAt: now,
+      playCount: playCount + 1,
     );
   }
 }

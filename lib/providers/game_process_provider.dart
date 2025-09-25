@@ -14,6 +14,11 @@ class GameProcessNotifier extends Notifier<Map<String, GameProcessInfo>> {
   Timer? _updateTimer;
   final _processManager = GameProcessManager();
 
+  // 设置消息回调（用于显示 SnackBar）
+  void setMessageCallback(Function(String message, bool isSuccess)? callback) {
+    _processManager.setAutoBackupCallback(callback);
+  }
+
   // 启动游戏
   Future<bool> launchGame(String gameId, String executablePath) async {
     final success = await _processManager.launchGame(gameId, executablePath);

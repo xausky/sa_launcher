@@ -167,6 +167,16 @@ class GameProcessManager {
     _handleAutoBackup(gameId);
   }
 
+  // 自动备份消息回调
+  Function(String message, bool isSuccess)? _autoBackupCallback;
+
+  // 设置自动备份消息回调
+  void setAutoBackupCallback(
+    Function(String message, bool isSuccess)? callback,
+  ) {
+    _autoBackupCallback = callback;
+  }
+
   // 处理自动备份
   Future<void> _handleAutoBackup(String gameId) async {
     try {
@@ -181,10 +191,23 @@ class GameProcessManager {
 
       if (game != null) {
         // 检查并创建自动备份
-        await AutoBackupService.checkAndCreateAutoBackup(game);
+        final result = await AutoBackupService.checkAndCreateAutoBackup(game);
+
+        // 根据结果显示相应的消息
+        if (_autoBackupCallback != null) {
+          if (result == true) {
+            _autoBackupCallback!('已为游戏 ${game.title} 创建自动备份', true);
+          } else if (result == false) {
+            _autoBackupCallback!('未检测到存档目录变更，跳过本次自动备份', false);
+          }
+          // result == null 时不显示消息（未启用或出错）
+        }
       }
     } catch (e) {
       print('处理自动备份失败: $e');
+      if (_autoBackupCallback != null) {
+        _autoBackupCallback!('自动备份失败: $e', false);
+      }
     }
   }
 

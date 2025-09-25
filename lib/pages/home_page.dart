@@ -23,6 +23,26 @@ class _HomePageState extends ConsumerState<HomePage> {
   void initState() {
     super.initState();
     _checkForCloudUpdates();
+
+    // 设置自动备份消息回调
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(gameProcessProvider.notifier)
+          .setMessageCallback(_showAutoBackupMessage);
+    });
+  }
+
+  // 显示自动备份消息
+  void _showAutoBackupMessage(String message, bool isSuccess) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isSuccess ? Colors.green : Colors.orange,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   // 检查云端更新

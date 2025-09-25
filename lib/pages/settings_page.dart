@@ -16,6 +16,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _autoBackupEnabled = false;
   bool _autoSyncEnabled = false;
   bool _isLoading = true;
+  int _autoBackupCount = 3; // 默认保存3个自动备份
 
   // 云同步相关状态
   final TextEditingController _cloudUrlController = TextEditingController();
@@ -44,6 +45,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
       setState(() {
         _autoBackupEnabled = settings['autoBackupEnabled'] as bool? ?? false;
+        _autoBackupCount = settings['autoBackupCount'] as int? ?? 3;
         _autoSyncEnabled = autoSyncEnabled;
         _isCloudConfigured = cloudConfig != null;
         if (cloudConfig != null) {
@@ -68,6 +70,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     try {
       await AppDataService.updateSettings({
         'autoBackupEnabled': _autoBackupEnabled,
+        'autoBackupCount': _autoBackupCount,
       });
 
       if (mounted) {
@@ -419,6 +422,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                         if (_autoBackupEnabled) ...[
                           const SizedBox(height: 16),
+
+                          // 自动备份数量配置
+                          ListTile(
+                            title: const Text('自动备份保存数量'),
+                            subtitle: Text(
+                              '当前保存 $_autoBackupCount 个自动备份，超出数量时会自动删除最旧的备份',
+                            ),
+                            trailing: SizedBox(
+                              width: 120,
+                              child: DropdownButton<int>(
+                                value: _autoBackupCount,
+                                isExpanded: true,
+                                items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((
+                                  count,
+                                ) {
+                                  return DropdownMenuItem<int>(
+                                    value: count,
+                                    child: Text('$count 个'),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _autoBackupCount = value;
+                                    });
+                                    _saveSettings();
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -432,7 +468,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                 const SizedBox(width: 12),
                                 const Expanded(
                                   child: Text(
-                                    '自动备份将以 "auto.zip" 为文件名保存，并在备份列表中置顶显示。',
+                                    '自动备份将以 "auto-时间.zip" 为文件名保存，并在备份列表中置顶显示。只有检测到存档目录变更时才会创建新的自动备份。',
                                     style: TextStyle(fontSize: 14),
                                   ),
                                 ),

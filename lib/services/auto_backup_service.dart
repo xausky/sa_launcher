@@ -27,51 +27,55 @@ class AutoBackupService {
   static const String _autoBackupName = 'auto';
 
   // 检查游戏结束时是否需要创建自动备份
-  static Future<void> checkAndCreateAutoBackup(Game game) async {
+  // 返回值：true 表示创建了备份，false 表示跳过了备份，null 表示出错或未启用
+  static Future<bool?> checkAndCreateAutoBackup(Game game) async {
     try {
       // 检查是否启用了自动备份
       final autoBackupEnabled =
           await AppDataService.getSetting<bool>('autoBackupEnabled', false) ??
           false;
       if (!autoBackupEnabled) {
-        return;
+        return null; // 未启用自动备份
       }
 
       // 检查游戏是否配置了存档路径
       if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
         debugPrint('游戏 ${game.title} 未配置存档路径，跳过自动备份');
-        return;
+        return null;
       }
 
       final saveDataDir = Directory(game.saveDataPath!);
       if (!await saveDataDir.exists()) {
         debugPrint('游戏 ${game.title} 存档路径不存在，跳过自动备份');
-        return;
+        return null;
       }
 
       // 获取存档目录的最新文件修改时间
       final latestModifyTime = await _getLatestModifyTime(saveDataDir);
       if (latestModifyTime == null) {
         debugPrint('游戏 ${game.title} 存档目录为空，跳过自动备份');
-        return;
+        return null;
       }
 
-      // 获取当前的自动备份
-      final currentAutoBackup = await _getCurrentAutoBackup(game.id);
+      // 获取最新的自动备份
+      final latestAutoBackup = await _getLatestAutoBackup(game.id);
 
       // 如果没有自动备份，或者存档有更新，则创建新的自动备份
-      if (currentAutoBackup == null ||
-          latestModifyTime.isAfter(currentAutoBackup.createdAt)) {
+      if (latestAutoBackup == null ||
+          latestModifyTime.isAfter(latestAutoBackup.createdAt)) {
         debugPrint(
-          'currentAutoBackup: ${currentAutoBackup?.createdAt} ${latestModifyTime}',
+          'latestAutoBackup: ${latestAutoBackup?.createdAt} $latestModifyTime',
         );
-        await _createAutoBackup(game, currentAutoBackup);
+        await _createAutoBackup(game);
         debugPrint('为游戏 ${game.title} 创建了自动备份');
+        return true; // 成功创建了备份
       } else {
-        debugPrint('游戏 ${game.title} 存档未更新，跳过自动备份');
+        debugPrint('未检测到存档目录变更，跳过本次自动备份');
+        return false; // 跳过了备份
       }
     } catch (e) {
       debugPrint('检查自动备份失败: $e');
+      return null; // 出错了
     }
   }
 
@@ -95,36 +99,42 @@ class AutoBackupService {
     return latestTime;
   }
 
-  // 获取当前的自动备份
-  static Future<SaveBackup?> _getCurrentAutoBackup(String gameId) async {
+  // 获取游戏的所有自动备份
+  static Future<List<SaveBackup>> _getAutoBackups(String gameId) async {
     try {
       final gameBackups = await AppDataService.getGameBackups(gameId);
 
-      // 查找名为 "auto" 的备份
-      for (final backup in gameBackups) {
-        if (backup.name == _autoBackupName) {
-          return backup;
-        }
-      }
-
-      return null;
+      // 查找所有自动备份（名称为 "auto" 的备份）
+      return gameBackups
+          .where((backup) => backup.name == _autoBackupName)
+          .toList();
     } catch (e) {
-      debugPrint('获取当前自动备份失败: $e');
+      debugPrint('获取自动备份列表失败: $e');
+      return [];
+    }
+  }
+
+  // 获取最新的自动备份
+  static Future<SaveBackup?> _getLatestAutoBackup(String gameId) async {
+    try {
+      final autoBackups = await _getAutoBackups(gameId);
+      if (autoBackups.isEmpty) return null;
+
+      // 按创建时间倒序排列，返回最新的
+      autoBackups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return autoBackups.first;
+    } catch (e) {
+      debugPrint('获取最新自动备份失败: $e');
       return null;
     }
   }
 
   // 创建自动备份
-  static Future<void> _createAutoBackup(
-    Game game,
-    SaveBackup? oldAutoBackup,
-  ) async {
+  static Future<void> _createAutoBackup(Game game) async {
     try {
-      // 如果存在旧的自动备份，先删除它
-      if (oldAutoBackup != null) {
-        await SaveBackupService.deleteBackup(oldAutoBackup, autoUpload: false);
-        debugPrint('删除旧的自动备份: ${oldAutoBackup.filePath}');
-      }
+      // 获取配置的自动备份数量
+      final maxBackupCount =
+          await AppDataService.getSetting<int>('autoBackupCount', 3) ?? 3;
 
       // 创建新的自动备份
       final backup = await SaveBackupService.createBackup(
@@ -135,11 +145,42 @@ class AutoBackupService {
 
       if (backup != null) {
         debugPrint('自动备份创建成功: ${backup.filePath}');
+
+        // 检查是否需要删除旧备份
+        await _cleanupOldAutoBackups(game.id, maxBackupCount);
       } else {
         debugPrint('自动备份创建失败');
       }
     } catch (e) {
       debugPrint('创建自动备份失败: $e');
+    }
+  }
+
+  // 清理旧的自动备份，保持指定数量
+  static Future<void> _cleanupOldAutoBackups(
+    String gameId,
+    int maxCount,
+  ) async {
+    try {
+      final autoBackups = await _getAutoBackups(gameId);
+
+      if (autoBackups.length <= maxCount) {
+        return; // 数量未超出，无需清理
+      }
+
+      // 按创建时间倒序排列
+      autoBackups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      // 删除超出数量的旧备份
+      for (int i = maxCount; i < autoBackups.length; i++) {
+        final oldBackup = autoBackups[i];
+        await SaveBackupService.deleteBackup(oldBackup, autoUpload: false);
+        debugPrint('删除旧的自动备份: ${oldBackup.filePath}');
+      }
+
+      debugPrint('清理完成，保留了 $maxCount 个最新的自动备份');
+    } catch (e) {
+      debugPrint('清理旧自动备份失败: $e');
     }
   }
 
@@ -170,13 +211,13 @@ class AutoBackupService {
     return [...autoBackups, ...manualBackups];
   }
 
-  // 删除游戏的自动备份
-  static Future<void> deleteAutoBackup(String gameId) async {
+  // 删除游戏的所有自动备份
+  static Future<void> deleteAutoBackups(String gameId) async {
     try {
-      final autoBackup = await _getCurrentAutoBackup(gameId);
-      if (autoBackup != null) {
-        await SaveBackupService.deleteBackup(autoBackup);
-        debugPrint('删除自动备份: ${autoBackup.filePath}');
+      final autoBackups = await _getAutoBackups(gameId);
+      for (final backup in autoBackups) {
+        await SaveBackupService.deleteBackup(backup);
+        debugPrint('删除自动备份: ${backup.filePath}');
       }
     } catch (e) {
       debugPrint('删除自动备份失败: $e');
@@ -200,8 +241,8 @@ class AutoBackupService {
         );
       }
 
-      // 获取当前的自动备份
-      final autoBackup = await _getCurrentAutoBackup(game.id);
+      // 获取最新的自动备份
+      final autoBackup = await _getLatestAutoBackup(game.id);
       if (autoBackup == null) {
         return BackupCheckResult(
           shouldApply: false,
@@ -277,10 +318,10 @@ class AutoBackupService {
     }
   }
 
-  // 应用自动备份
+  // 应用最新的自动备份
   static Future<bool> applyAutoBackup(Game game) async {
     try {
-      final autoBackup = await _getCurrentAutoBackup(game.id);
+      final autoBackup = await _getLatestAutoBackup(game.id);
       if (autoBackup == null ||
           game.saveDataPath == null ||
           game.saveDataPath!.isEmpty) {

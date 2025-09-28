@@ -57,7 +57,7 @@ class CloudBackupService {
       return true;
     }
 
-    if (localFile.path.endsWith('/app.json')) {
+    if (localFile.path.endsWith('${path.separator}app.json')) {
       final localStat = await localFile.stat();
       final localModified = localStat.modified;
       final localSize = localStat.size;

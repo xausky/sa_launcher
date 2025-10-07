@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:ffi/ffi.dart';
+import 'package:win32/win32.dart';
+import 'dart:ffi';
 import 'package:path/path.dart' as path;
 import '../models/game_process.dart';
 import '../models/game.dart';
@@ -66,7 +69,7 @@ class GameProcessManager {
     // 如果已经在监控，就不重复启动
     if (_monitorTimer?.isActive == true) return;
 
-    _monitorTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+    _monitorTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       _updateProcessStatus();
     });
   }
@@ -106,29 +109,18 @@ class GameProcessManager {
     }
   }
 
-  // 检查指定PID的进程是否还在运行
   Future<bool> _isProcessRunning(int pid) async {
+    final handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (handle == 0) return false; // 无法打开，说明可能已退出
+    final exitCodePtr = calloc<Uint32>();
     try {
-      if (Platform.isWindows) {
-        // 使用tasklist命令检查指定PID的进程
-        final result = await Process.run('tasklist', [
-          '/FO',
-          'CSV',
-          '/NH',
-          '/FI',
-          'PID eq $pid',
-        ]);
-
-        if (result.exitCode == 0) {
-          final output = result.stdout.toString();
-          return output.trim().isNotEmpty && output.contains(pid.toString());
-        }
-      }
-
-      return false;
-    } catch (e) {
-      print('检查进程状态失败: $e');
-      return false;
+      final success = GetExitCodeProcess(handle, exitCodePtr);
+      if (success == 0) return false;
+      final code = exitCodePtr.value;
+      return code == STILL_ACTIVE;
+    } finally {
+      calloc.free(exitCodePtr);
+      CloseHandle(handle);
     }
   }
 
@@ -144,24 +136,7 @@ class GameProcessManager {
     if (gameInfo == null) return false;
 
     try {
-      if (Platform.isWindows) {
-        // 使用taskkill命令终止进程
-        await Process.run('taskkill', [
-          '/PID',
-          gameInfo.processId.toString(),
-          '/F',
-        ]);
-      }
-
-      // 记录游戏时长统计（手动终止也要记录）
-      try {
-        await _recordPlaySession(gameId, gameInfo.startTime, DateTime.now());
-      } catch (e) {
-        print('记录游戏时长失败: $e');
-      }
-
-      _runningGames.remove(gameId);
-      return true;
+      return Process.killPid(gameInfo.processId, ProcessSignal.sigkill);
     } catch (e) {
       print('终止游戏进程失败: $e');
       return false;

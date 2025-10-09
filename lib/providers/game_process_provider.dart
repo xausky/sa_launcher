@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/game_process.dart';
+import '../models/file_modification.dart';
 import '../services/game_process_manager.dart';
 
 // 游戏进程状态管理
@@ -19,9 +20,31 @@ class GameProcessNotifier extends Notifier<Map<String, GameProcessInfo>> {
     _processManager.setAutoBackupCallback(callback);
   }
 
+  // 设置文件追踪回调
+  void setFileTrackingCallback(
+    Function(String gameId, FileTrackingSession session)? callback,
+  ) {
+    _processManager.setFileTrackingCallback(callback);
+  }
+
   // 启动游戏
   Future<bool> launchGame(String gameId, String executablePath) async {
     final success = await _processManager.launchGame(gameId, executablePath);
+    if (success) {
+      _updateState();
+    }
+    return success;
+  }
+
+  // 启动游戏并追踪文件修改
+  Future<bool> launchGameWithFileTracking(
+    String gameId,
+    String executablePath,
+  ) async {
+    final success = await _processManager.launchGameWithFileTracking(
+      gameId,
+      executablePath,
+    );
     if (success) {
       _updateState();
     }

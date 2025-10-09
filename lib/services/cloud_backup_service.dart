@@ -813,6 +813,81 @@ class CloudBackupService {
     }
   }
 
+  // Git 云同步：推送到远程仓库
+  static Future<CloudSyncResult> gitPushToCloud() async {
+    try {
+      final appDataDir = await AppDataService.getAppDataDirectory();
+
+      // 获取云同步配置中的 Git 远程仓库 URL
+      final config = await CloudSyncConfigService.getCloudSyncConfig();
+      if (config == null) {
+        return CloudSyncResult.noConfig;
+      }
+
+      // 使用 endPoint 作为 Git 远程仓库 URL（需要用户配置为 Git 仓库地址）
+      final remoteUrl = config.endPoint;
+
+      // 在数据目录执行 git push --all
+      final pushResult = await Process.run('git', [
+        'push',
+        '--all',
+        'origin',
+      ], workingDirectory: appDataDir.path);
+
+      if (pushResult.exitCode != 0) {
+        // 如果没有远程仓库，尝试添加
+        await Process.run('git', [
+          'remote',
+          'add',
+          'origin',
+          remoteUrl,
+        ], workingDirectory: appDataDir.path);
+
+        // 再次尝试推送
+        final retryResult = await Process.run('git', [
+          'push',
+          '--all',
+          'origin',
+        ], workingDirectory: appDataDir.path);
+
+        if (retryResult.exitCode != 0) {
+          debugPrint('Git push 失败: ${retryResult.stderr}');
+          return CloudSyncResult.uploadError;
+        }
+      }
+
+      debugPrint('Git 推送成功');
+      return CloudSyncResult.success;
+    } catch (e) {
+      debugPrint('Git 推送失败: $e');
+      return CloudSyncResult.uploadError;
+    }
+  }
+
+  // Git 云同步：从远程仓库拉取
+  static Future<CloudSyncResult> gitPullFromCloud() async {
+    try {
+      final appDataDir = await AppDataService.getAppDataDirectory();
+
+      // 在数据目录执行 git pull --all
+      final pullResult = await Process.run('git', [
+        'pull',
+        '--all',
+      ], workingDirectory: appDataDir.path);
+
+      if (pullResult.exitCode != 0) {
+        debugPrint('Git pull 失败: ${pullResult.stderr}');
+        return CloudSyncResult.downloadError;
+      }
+
+      debugPrint('Git 拉取成功');
+      return CloudSyncResult.success;
+    } catch (e) {
+      debugPrint('Git 拉取失败: $e');
+      return CloudSyncResult.downloadError;
+    }
+  }
+
   // 自动上传到云端（静默模式，不显示确认对话框）
   static Future<void> autoUploadToCloud() async {
     try {
@@ -828,18 +903,26 @@ class CloudBackupService {
         return;
       }
 
-      print('开始自动上传到云端...');
+      debugPrint('开始自动上传到云端...');
 
-      // 静默上传，跳过确认检查
+      // 首先尝试 Git 同步
+      final gitResult = await gitPushToCloud();
+      if (gitResult == CloudSyncResult.success) {
+        debugPrint('Git 自动推送成功');
+        return;
+      }
+
+      // Git 同步失败，回退到传统方式
+      debugPrint('Git 推送失败，回退到传统云同步');
       final result = await uploadToCloud(skipConfirmation: true);
 
       if (result == CloudSyncResult.success) {
-        print('自动上传成功');
+        debugPrint('传统自动上传成功');
       } else if (result != CloudSyncResult.noChanges) {
-        print('自动上传失败: ${getSyncResultMessage(result)}');
+        debugPrint('传统自动上传失败: ${getSyncResultMessage(result)}');
       }
     } catch (e) {
-      print('自动上传异常: $e');
+      debugPrint('自动上传异常: $e');
     }
   }
 
@@ -852,6 +935,13 @@ class CloudBackupService {
         return false;
       }
 
+      // 首先尝试 Git 方式检查更新
+      final hasGitUpdates = await _hasGitUpdates();
+      if (hasGitUpdates != null) {
+        return hasGitUpdates;
+      }
+
+      // Git 检查失败，回退到传统方式
       final config = await CloudSyncConfigService.getCloudSyncConfig();
       if (config == null) {
         return false;
@@ -878,8 +968,43 @@ class CloudBackupService {
 
       return false;
     } catch (e) {
-      print('检查云端更新失败: $e');
+      debugPrint('检查云端更新失败: $e');
       return false;
+    }
+  }
+
+  // 检查 Git 远程仓库是否有更新
+  static Future<bool?> _hasGitUpdates() async {
+    try {
+      final appDataDir = await AppDataService.getAppDataDirectory();
+
+      // 执行 git fetch 获取远程更新
+      final fetchResult = await Process.run('git', [
+        'fetch',
+      ], workingDirectory: appDataDir.path);
+
+      if (fetchResult.exitCode != 0) {
+        debugPrint('Git fetch 失败: ${fetchResult.stderr}');
+        return null; // 无法检查，返回 null
+      }
+
+      // 检查是否落后于远程分支
+      final behindResult = await Process.run('git', [
+        'rev-list',
+        '--count',
+        'HEAD..@{u}',
+      ], workingDirectory: appDataDir.path);
+
+      if (behindResult.exitCode == 0) {
+        final behindCount =
+            int.tryParse(behindResult.stdout.toString().trim()) ?? 0;
+        return behindCount > 0;
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('检查 Git 更新失败: $e');
+      return null;
     }
   }
 }

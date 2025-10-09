@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/home_page.dart';
 import 'services/app_data_service.dart';
+import 'services/git_worktree_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +24,23 @@ void main() async {
       await windowManager.focus();
     });
   }
-  print('AppDataDirectory ${await AppDataService.getAppDataDirectory()}');
+
+  // 初始化应用数据目录
+  final appDataDir = await AppDataService.getAppDataDirectory();
+  print('AppDataDirectory $appDataDir');
+
+  // 初始化 Git 仓库
+  try {
+    final gitInitSuccess = await GitWorktreeService.initMainRepository();
+    if (gitInitSuccess) {
+      print('Git 仓库初始化成功');
+    } else {
+      print('Git 仓库初始化失败');
+    }
+  } catch (e) {
+    print('Git 仓库初始化异常: $e');
+  }
+
   runApp(const ProviderScope(child: GameLauncherApp()));
 }
 

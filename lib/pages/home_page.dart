@@ -247,6 +247,26 @@ class _HomePageState extends ConsumerState<HomePage> {
         }
       }
 
+      // 检查存档目录是否有 git 更新
+      if (checkResult.shouldPullSaveData) {
+        final shouldPull = await _showSaveDataGitUpdateDialog(
+          context,
+          game,
+          checkResult,
+        );
+        if (shouldPull == true) {
+          final pullSuccess = await AutoBackupService.pullSaveDataUpdates(game);
+          if (!pullSuccess) {
+            _showErrorDialog(context, '拉取存档更新失败');
+            return;
+          }
+          // 重新检查备份状态
+          checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
+            game,
+          );
+        }
+      }
+
       if (checkResult.shouldApply) {
         final shouldApply = await _showAutoBackupDialog(
           context,
@@ -276,7 +296,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<bool?> _showSyncCloudDialog(
-    context,
+    BuildContext context,
     Game game,
     BackupCheckResult checkResult,
   ) async {
@@ -293,6 +313,88 @@ class _HomePageState extends ConsumerState<HomePage> {
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child: const Text('下载最新版本'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 显示存档目录 Git 更新对话框
+  Future<bool?> _showSaveDataGitUpdateDialog(
+    BuildContext context,
+    Game game,
+    BackupCheckResult checkResult,
+  ) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.sync, color: Colors.blue[600]),
+            const SizedBox(width: 12),
+            const Text('发现存档更新'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '游戏 "${game.title}" 的存档目录检测到远程更新。',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.blue[600],
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Git 同步信息',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '存档目录使用 Git 进行版本管理，检测到远程仓库有新的提交。'
+                    '建议在启动游戏前拉取最新的存档数据。',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '是否要拉取最新的存档数据？',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('跳过'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('拉取更新'),
           ),
         ],
       ),

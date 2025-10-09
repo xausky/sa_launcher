@@ -5,6 +5,7 @@ import '../models/save_backup.dart';
 import 'app_data_service.dart';
 import 'save_backup_service.dart';
 import 'cloud_backup_service.dart';
+import 'git_worktree_service.dart';
 
 // 备份检查结果
 class BackupCheckResult {
@@ -13,6 +14,8 @@ class BackupCheckResult {
   final DateTime? autoBackupTime;
   final DateTime? saveDataTime;
   final String reason;
+  final bool hasGitUpdates; // 存档目录是否有 git 更新
+  final bool shouldPullSaveData; // 是否需要拉取存档目录的 git 更新
 
   BackupCheckResult({
     required this.shouldApply,
@@ -20,6 +23,8 @@ class BackupCheckResult {
     this.autoBackupTime,
     this.saveDataTime,
     required this.reason,
+    this.hasGitUpdates = false,
+    this.shouldPullSaveData = false,
   });
 }
 
@@ -229,6 +234,9 @@ class AutoBackupService {
     Game game,
   ) async {
     try {
+      // 首先执行启动前的 git 同步检查
+      await GitWorktreeService.checkSyncBeforeLaunch();
+
       // 检查云端是否有更新（在检查本地自动备份之前）
       final hasCloudUpdates = await CloudBackupService.hasCloudUpdates();
 
@@ -241,6 +249,18 @@ class AutoBackupService {
         );
       }
 
+      // 检查存档目录的 git 状态
+      bool hasGitUpdates = false;
+      bool shouldPullSaveData = false;
+
+      if (await GitWorktreeService.isWorktreeManaged(game.saveDataPath!)) {
+        final gitStatus = await GitWorktreeService.getGitStatus(
+          game.saveDataPath!,
+        );
+        hasGitUpdates = gitStatus['hasRemoteUpdates'] ?? false;
+        shouldPullSaveData = hasGitUpdates;
+      }
+
       // 获取最新的自动备份
       final autoBackup = await _getLatestAutoBackup(game.id);
       if (autoBackup == null) {
@@ -248,6 +268,8 @@ class AutoBackupService {
           shouldApply: false,
           shouldSyncCloud: hasCloudUpdates,
           reason: '没有可用的自动备份',
+          hasGitUpdates: hasGitUpdates,
+          shouldPullSaveData: shouldPullSaveData,
         );
       }
 
@@ -262,6 +284,8 @@ class AutoBackupService {
           saveDataTime: null,
           shouldSyncCloud: hasCloudUpdates,
           reason: '存档目录不存在',
+          hasGitUpdates: hasGitUpdates,
+          shouldPullSaveData: shouldPullSaveData,
         );
       }
 
@@ -277,6 +301,8 @@ class AutoBackupService {
           saveDataTime: null,
           shouldSyncCloud: hasCloudUpdates,
           reason: '存档目录为空',
+          hasGitUpdates: hasGitUpdates,
+          shouldPullSaveData: shouldPullSaveData,
         );
       }
 
@@ -298,6 +324,8 @@ class AutoBackupService {
           saveDataTime: latestModifyTime,
           shouldSyncCloud: hasCloudUpdates,
           reason: '自动备份更新（相差${minutesDifference}分钟）',
+          hasGitUpdates: hasGitUpdates,
+          shouldPullSaveData: shouldPullSaveData,
         );
       }
 
@@ -307,6 +335,8 @@ class AutoBackupService {
         saveDataTime: latestModifyTime,
         shouldSyncCloud: hasCloudUpdates,
         reason: '当前存档已是最新',
+        hasGitUpdates: hasGitUpdates,
+        shouldPullSaveData: shouldPullSaveData,
       );
     } catch (e) {
       debugPrint('检查启动前备份应用失败: $e');
@@ -314,6 +344,8 @@ class AutoBackupService {
         shouldApply: false,
         shouldSyncCloud: false,
         reason: '检查失败: $e',
+        hasGitUpdates: false,
+        shouldPullSaveData: false,
       );
     }
   }
@@ -340,6 +372,33 @@ class AutoBackupService {
       return success;
     } catch (e) {
       debugPrint('应用自动备份失败: $e');
+      return false;
+    }
+  }
+
+  // 拉取存档目录的 git 更新
+  static Future<bool> pullSaveDataUpdates(Game game) async {
+    try {
+      if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
+        return false;
+      }
+
+      if (!await GitWorktreeService.isWorktreeManaged(game.saveDataPath!)) {
+        debugPrint('存档目录未被 git worktree 管理: ${game.saveDataPath}');
+        return false;
+      }
+
+      final success = await GitWorktreeService.pullFromCloud(
+        game.saveDataPath!,
+      );
+      if (success) {
+        debugPrint('存档目录 git 更新拉取成功: ${game.title}');
+      } else {
+        debugPrint('存档目录 git 更新拉取失败: ${game.title}');
+      }
+      return success;
+    } catch (e) {
+      debugPrint('拉取存档目录 git 更新失败: $e');
       return false;
     }
   }

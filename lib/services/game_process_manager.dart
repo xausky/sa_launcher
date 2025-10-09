@@ -1,9 +1,7 @@
 import 'dart:io';
 import 'dart:async';
-import 'package:ffi/ffi.dart';
-import 'package:win32/win32.dart';
-import 'dart:ffi';
 import 'package:path/path.dart' as path;
+import 'package:event_tracing_windows/event_tracing_windows.dart';
 import '../models/game_process.dart';
 import '../models/game.dart';
 import '../services/app_data_service.dart';
@@ -15,7 +13,9 @@ class GameProcessManager {
   GameProcessManager._internal();
 
   final Map<String, GameProcessInfo> _runningGames = {};
-  Timer? _monitorTimer;
+  final EventTracingWindows _etw = EventTracingWindows();
+  StreamSubscription<ProcessEvent>? _processSubscription;
+  bool _isMonitoring = false;
 
   // 获取正在运行的游戏信息
   GameProcessInfo? getGameProcessInfo(String gameId) {
@@ -55,7 +55,7 @@ class GameProcessManager {
       );
 
       // 开始监控进程
-      _startMonitoring();
+      await _startMonitoring();
 
       return true;
     } catch (e) {
@@ -65,69 +65,101 @@ class GameProcessManager {
   }
 
   // 开始监控进程
-  void _startMonitoring() {
+  Future<void> _startMonitoring() async {
     // 如果已经在监控，就不重复启动
-    if (_monitorTimer?.isActive == true) return;
+    if (_isMonitoring) return;
 
-    _monitorTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      _updateProcessStatus();
-    });
+    try {
+      // 启动 ETW 进程监控
+      final success = await _etw.startProcessMonitoring();
+      if (!success) {
+        print('启动 ETW 进程监控失败，可能需要管理员权限');
+        return;
+      }
+
+      _isMonitoring = true;
+
+      // 监听进程事件
+      _processSubscription = _etw.processEventStream.listen((event) {
+        _handleProcessEvent(event);
+      });
+    } catch (e) {
+      print('启动进程监控失败: $e');
+    }
   }
 
-  // 更新进程状态
-  Future<void> _updateProcessStatus() async {
-    if (_runningGames.isEmpty) {
-      _stopMonitoring();
-      return;
+  // 处理进程事件
+  void _handleProcessEvent(ProcessEvent event) {
+    final pid = event.processId;
+
+    if (event.type == ProcessEventType.started) {
+      // 进程启动事件 - 检查是否是游戏相关进程
+      _onProcessStarted(pid, event.parentProcessId);
+    } else if (event.type == ProcessEventType.terminated) {
+      // 进程终止事件 - 检查是否是游戏进程
+      _onProcessTerminated(pid);
     }
+  }
 
-    final List<String> gamesToRemove = [];
-
+  // 处理进程启动事件
+  void _onProcessStarted(int pid, int parentProcessId) {
+    // 如果 parentProcessId 在某个游戏的进程集合内，则认为是相关进程
     for (final entry in _runningGames.entries) {
       final gameId = entry.key;
       final gameInfo = entry.value;
 
-      try {
-        // 检查进程是否还在运行
-        final isRunning = await _isProcessRunning(gameInfo.processId);
-
-        if (!isRunning) {
-          // 进程已结束，记录游戏时长并触发自动备份检查
-          await _onGameEnded(gameId, gameInfo);
-          // 移除游戏
-          gamesToRemove.add(gameId);
-        }
-      } catch (e) {
-        print('监控进程失败: $e');
-        gamesToRemove.add(gameId);
+      if (gameInfo.processIds.contains(parentProcessId)) {
+        // 添加到游戏进程集合
+        _runningGames[gameId] = gameInfo.addProcessId(pid);
+        break;
       }
-    }
-
-    // 移除已结束的游戏
-    for (final gameId in gamesToRemove) {
-      _runningGames.remove(gameId);
     }
   }
 
-  Future<bool> _isProcessRunning(int pid) async {
-    final handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-    if (handle == 0) return false; // 无法打开，说明可能已退出
-    final exitCodePtr = calloc<Uint32>();
-    try {
-      final success = GetExitCodeProcess(handle, exitCodePtr);
-      if (success == 0) return false;
-      final code = exitCodePtr.value;
-      return code == STILL_ACTIVE;
-    } finally {
-      calloc.free(exitCodePtr);
-      CloseHandle(handle);
+  // 处理进程终止事件
+  void _onProcessTerminated(int pid) {
+    final List<String> gamesToCheck = [];
+
+    // 从所有游戏的进程集合中移除该进程ID
+    for (final entry in _runningGames.entries) {
+      final gameId = entry.key;
+      final gameInfo = entry.value;
+
+      if (gameInfo.processIds.contains(pid)) {
+        _runningGames[gameId] = gameInfo.removeProcessId(pid);
+        gamesToCheck.add(gameId);
+      }
+    }
+
+    // 检查游戏是否完全结束
+    for (final gameId in gamesToCheck) {
+      final gameInfo = _runningGames[gameId];
+      if (gameInfo != null && !gameInfo.isRunning) {
+        // 游戏所有进程都已结束
+        _onGameEnded(gameId, gameInfo);
+        _runningGames.remove(gameId);
+      }
+    }
+
+    // 如果没有游戏在运行，停止监控
+    if (_runningGames.isEmpty) {
+      _stopMonitoring();
     }
   }
 
   // 停止监控
-  void _stopMonitoring() {
-    _monitorTimer?.cancel();
-    _monitorTimer = null;
+  Future<void> _stopMonitoring() async {
+    if (!_isMonitoring) return;
+
+    try {
+      await _processSubscription?.cancel();
+      _processSubscription = null;
+
+      await _etw.stopProcessMonitoring();
+      _isMonitoring = false;
+    } catch (e) {
+      print('停止进程监控失败: $e');
+    }
   }
 
   // 手动停止游戏进程
@@ -234,8 +266,8 @@ class GameProcessManager {
   }
 
   // 清理资源
-  void dispose() {
-    _stopMonitoring();
+  Future<void> dispose() async {
+    await _stopMonitoring();
     _runningGames.clear();
   }
 }

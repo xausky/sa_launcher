@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../models/game_process.dart';
 import '../models/game.dart';
 import '../models/save_backup.dart';
 import '../services/save_backup_service.dart';
@@ -257,8 +258,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isRunning = ref.watch(isGameRunningProvider(widget.game.id));
-    final processId = ref.watch(gameProcessIdProvider(widget.game.id));
+    final info = ref.watch(gameProcessInfoProvider(widget.game.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -280,7 +280,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 游戏基本信息
-                  _buildGameInfo(isRunning, processId),
+                  _buildGameInfo(info),
                   const SizedBox(height: 24),
 
                   // 游戏统计信息
@@ -295,7 +295,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
     );
   }
 
-  Widget _buildGameInfo(bool isRunning, int? processId) {
+  Widget _buildGameInfo(GameProcessInfo? info) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -356,10 +356,10 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
                       if (widget.game.saveDataPath != null &&
                           widget.game.saveDataPath!.isNotEmpty)
                         _buildPathInfoRow('存档路径', widget.game.saveDataPath!),
-                      if (isRunning)
+                      if (info?.isRunning ?? false)
                         _buildInfoRow(
                           '运行状态',
-                          'PID: $processId',
+                          '${info?.processId}(${info?.processCount})',
                           color: Colors.green,
                         ),
                       _buildInfoRow(
@@ -376,7 +376,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
             // 操作按钮
             Row(
               children: [
-                if (!isRunning)
+                if (!(info?.isRunning ?? false))
                   ElevatedButton.icon(
                     onPressed: _launchGame,
                     icon: const Icon(Icons.play_arrow),

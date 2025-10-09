@@ -69,15 +69,3 @@ final gameProcessInfoProvider = Provider.family<GameProcessInfo?, String>((
   final processMap = ref.watch(gameProcessProvider);
   return processMap[gameId];
 });
-
-// 检查游戏是否正在运行
-final isGameRunningProvider = Provider.family<bool, String>((ref, gameId) {
-  final processInfo = ref.watch(gameProcessInfoProvider(gameId));
-  return processInfo?.isRunning ?? false;
-});
-
-// 获取游戏进程PID
-final gameProcessIdProvider = Provider.family<int?, String>((ref, gameId) {
-  final processInfo = ref.watch(gameProcessInfoProvider(gameId));
-  return processInfo?.processId;
-});

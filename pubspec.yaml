@@ -39,8 +39,9 @@ dependencies:
 
   # 国际化和日期格式化
   intl: ^0.20.0
-  win32: ^5.14.0
-  ffi: ^2.1.4
+
+  # Windows ETW 进程监控
+  event_tracing_windows: ^0.0.1
 
 dev_dependencies:
   flutter_test:

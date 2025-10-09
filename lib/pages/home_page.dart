@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sa_launcher/models/game_process.dart';
 import '../models/game.dart';
 import '../providers/game_provider.dart';
 import '../providers/game_process_provider.dart';
@@ -572,8 +573,7 @@ class _GameCardState extends ConsumerState<GameCard> {
 
   @override
   Widget build(BuildContext context) {
-    final isRunning = ref.watch(isGameRunningProvider(widget.game.id));
-    final processId = ref.watch(gameProcessIdProvider(widget.game.id));
+    final info = ref.watch(gameProcessInfoProvider(widget.game.id));
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -670,7 +670,7 @@ class _GameCardState extends ConsumerState<GameCard> {
                     const SizedBox(height: 4),
 
                     // 游戏统计信息
-                    _buildGameStatsInfo(widget.game, isRunning, processId),
+                    _buildGameStatsInfo(widget.game, info),
                   ],
                 ),
               ),
@@ -687,7 +687,7 @@ class _GameCardState extends ConsumerState<GameCard> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (!isRunning)
+                      if (!(info?.isRunning ?? false))
                         ElevatedButton.icon(
                           onPressed: widget.onLaunch,
                           icon: const Icon(Icons.play_arrow),
@@ -753,9 +753,9 @@ class _GameCardState extends ConsumerState<GameCard> {
     );
   }
 
-  Widget _buildGameStatsInfo(Game game, bool isRunning, int? processId) {
-    if (isRunning) {
-      return _buildRunningInfo(processId);
+  Widget _buildGameStatsInfo(Game game, GameProcessInfo? info) {
+    if (info?.isRunning ?? false) {
+      return _buildRunningInfo(info);
     }
 
     if (game.playCount == 0) {
@@ -779,7 +779,7 @@ class _GameCardState extends ConsumerState<GameCard> {
     );
   }
 
-  Widget _buildRunningInfo(int? processId) {
+  Widget _buildRunningInfo(GameProcessInfo? info) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -787,7 +787,7 @@ class _GameCardState extends ConsumerState<GameCard> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        'PID: $processId',
+        '${info?.processId}(${info?.processCount})',
         style: const TextStyle(
           fontSize: 10,
           color: Colors.white,

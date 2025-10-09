@@ -208,21 +208,29 @@ class CloudSyncConfigService {
   }
 
   // 获取游戏路径数据
-  static Future<Map<String, String>> getGamePaths() async {
+  static Future<Map<String, Map<String, String>>> getGamePaths() async {
     try {
       final localConfig = await _readLocalConfig();
       final gamePaths = localConfig['gamePaths'] as Map<String, dynamic>?;
       if (gamePaths != null) {
-        return Map<String, String>.from(gamePaths);
+        final result = <String, Map<String, String>>{};
+        for (final entry in gamePaths.entries) {
+          final gameId = entry.key;
+          final pathData = entry.value as Map<String, dynamic>;
+          result[gameId] = Map<String, String>.from(pathData);
+        }
+        return result;
       }
     } catch (e) {
       print('获取游戏路径失败: $e');
     }
-    return <String, String>{};
+    return <String, Map<String, String>>{};
   }
 
   // 设置游戏路径数据
-  static Future<void> setGamePaths(Map<String, String> gamePaths) async {
+  static Future<void> setGamePaths(
+    Map<String, Map<String, String>> gamePaths,
+  ) async {
     try {
       final localConfig = await _readLocalConfig();
       localConfig['gamePaths'] = gamePaths;
@@ -240,12 +248,11 @@ class CloudSyncConfigService {
   ) async {
     try {
       final gamePaths = await getGamePaths();
-      gamePaths['${gameId}_executablePath'] = executablePath;
+      final gamePathData = <String, String>{'executablePath': executablePath};
       if (saveDataPath != null) {
-        gamePaths['${gameId}_saveDataPath'] = saveDataPath;
-      } else {
-        gamePaths.remove('${gameId}_saveDataPath');
+        gamePathData['saveDataPath'] = saveDataPath;
       }
+      gamePaths[gameId] = gamePathData;
       await setGamePaths(gamePaths);
     } catch (e) {
       print('保存游戏路径失败: $e');
@@ -256,8 +263,7 @@ class CloudSyncConfigService {
   static Future<void> removeGamePaths(String gameId) async {
     try {
       final gamePaths = await getGamePaths();
-      gamePaths.remove('${gameId}_executablePath');
-      gamePaths.remove('${gameId}_saveDataPath');
+      gamePaths.remove(gameId);
       await setGamePaths(gamePaths);
     } catch (e) {
       print('删除游戏路径失败: $e');

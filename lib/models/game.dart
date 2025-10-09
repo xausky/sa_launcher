@@ -71,15 +71,16 @@ class Game {
   // 从云端JSON和本地路径数据合并创建
   factory Game.fromCloudJsonWithLocalPaths(
     Map<String, dynamic> cloudJson,
-    Map<String, String> localPaths,
+    Map<String, Map<String, String>> localPaths,
   ) {
     final gameId = cloudJson['id'] as String;
+    final gamePathData = localPaths[gameId] ?? <String, String>{};
     return Game(
       id: gameId,
       title: cloudJson['title'],
-      executablePath: localPaths['${gameId}_executablePath'] ?? '',
+      executablePath: gamePathData['executablePath'] ?? '',
       coverImageFileName: cloudJson['coverImageFileName'],
-      saveDataPath: localPaths['${gameId}_saveDataPath'],
+      saveDataPath: gamePathData['saveDataPath'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(cloudJson['createdAt']),
       totalPlaytime: Duration(seconds: cloudJson['totalPlaytimeSeconds'] ?? 0),
       lastPlayedAt: cloudJson['lastPlayedAt'] != null

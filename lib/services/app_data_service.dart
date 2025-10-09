@@ -124,12 +124,15 @@ class AppDataService {
       await writeAppData(appData);
 
       // 分别保存路径数据到本地
-      final gamePaths = <String, String>{};
+      final gamePaths = <String, Map<String, String>>{};
       for (final game in games) {
-        gamePaths['${game.id}_executablePath'] = game.executablePath;
+        final gamePathData = <String, String>{
+          'executablePath': game.executablePath,
+        };
         if (game.saveDataPath != null) {
-          gamePaths['${game.id}_saveDataPath'] = game.saveDataPath!;
+          gamePathData['saveDataPath'] = game.saveDataPath!;
         }
+        gamePaths[game.id] = gamePathData;
       }
       await CloudSyncConfigService.setGamePaths(gamePaths);
     } catch (e) {

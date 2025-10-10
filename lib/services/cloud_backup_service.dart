@@ -27,24 +27,14 @@ class CloudBackupService {
       }
 
       // 推送所有分支
-      final pushResult = await Process.run('git', [
-        'push',
-        '--all',
-        'origin',
-      ], workingDirectory: appDataDir.path);
+      await GitWorktreeService.createMainCommit(appDataDir.path);
 
-      if (pushResult.exitCode != 0) {
-        debugPrint('Git push 失败: ${pushResult.stderr}');
+      final pushResult = await GitWorktreeService.push(appDataDir.path);
+
+      if (!pushResult) {
+        debugPrint('Git push 失败');
         return CloudSyncResult.uploadError;
       }
-
-      // 推送标签
-      await Process.run('git', [
-        'push',
-        '--tags',
-        'origin',
-      ], workingDirectory: appDataDir.path);
-
       debugPrint('Git 推送成功');
       return CloudSyncResult.success;
     } catch (e) {

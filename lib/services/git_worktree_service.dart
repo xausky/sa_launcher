@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
@@ -30,6 +31,12 @@ class GitWorktreeService {
 
       // 配置用户信息（如果没有全局配置）
       await _configureGitUser(appDataDir.path);
+
+      await Process.run('git', [
+        'config',
+        'i18n.logoutputencoding',
+        'utf8',
+      ], workingDirectory: appDataDir.path);
 
       // 创建初始提交
       await createMainCommit(appDataDir.path);
@@ -164,6 +171,7 @@ class GitWorktreeService {
       final worktreeResult = await Process.run('git', [
         'worktree',
         'add',
+        '--orphan',
         '-B',
         gameId,
         gameId,
@@ -312,7 +320,7 @@ class GitWorktreeService {
         'log',
         '--pretty=format:%H|%s|%ai|%an',
         '--date=iso',
-      ], workingDirectory: saveDataPath);
+      ], workingDirectory: saveDataPath, stdoutEncoding: utf8);
 
       if (logResult.exitCode != 0) {
         debugPrint('Git log 失败: ${logResult.stderr}');
@@ -413,18 +421,12 @@ class GitWorktreeService {
   }
 
   /// 同步到云端（git push --all）
-  static Future<bool> pushToCloud(String saveDataPath, String remoteUrl) async {
+  static Future<bool> push(String saveDataPath) async {
     try {
-      if (!await isWorktreeManaged(saveDataPath)) {
-        return false;
-      }
-
-      // 添加远程仓库（如果不存在）
-      await _addRemoteIfNotExists(saveDataPath, remoteUrl);
-
       // 推送所有分支
       final pushResult = await Process.run('git', [
         'push',
+        '--force-with-lease',
         '--all',
         'origin',
       ], workingDirectory: saveDataPath);
@@ -468,9 +470,9 @@ class GitWorktreeService {
         return false;
       }
 
-      // 拉取所有分支
+      // 拉取分支
       final pullResult = await Process.run('git', [
-        'pull',
+        'pull', '--rebase',
       ], workingDirectory: tagrtPath);
 
       if (pullResult.exitCode != 0) {
@@ -650,6 +652,71 @@ class GitWorktreeService {
       return result.exitCode == 0;
     } catch (e) {
       debugPrint('检查远程仓库配置失败: $e');
+      return false;
+    }
+  }
+
+  /// 修改备份信息（如果是最新提交使用 git commit --amend，否则使用 git rebase -i 修改提交信息）
+  /// 返回值：成功时返回 true，失败时返回 false
+  static Future<bool> modifyBackupInfo(
+    String saveDataPath,
+    String commitHash,
+    String newMessage,
+  ) async {
+    try {
+      if (!await isWorktreeManaged(saveDataPath)) {
+        debugPrint('存档目录未被 git worktree 管理: $saveDataPath');
+        return false;
+      }
+
+      // 获取当前 HEAD 的 hash
+      final currentHeadResult = await Process.run('git', [
+        'rev-parse',
+        'HEAD',
+      ], workingDirectory: saveDataPath);
+
+      if (currentHeadResult.exitCode != 0) {
+        debugPrint('获取当前 HEAD 失败: ${currentHeadResult.stderr}');
+        return false;
+      }
+
+      final currentHead = currentHeadResult.stdout.toString().trim();
+
+      // 判断是否为最新提交
+      if (commitHash == currentHead) {
+        // 是最新提交，使用 git commit --amend 修改提交信息
+        final amendResult = await Process.run('git', [
+          'commit',
+          '--amend',
+          '-m',
+          newMessage,
+        ], workingDirectory: saveDataPath);
+
+        if (amendResult.exitCode != 0) {
+          debugPrint('Git commit amend 失败: ${amendResult.stderr}');
+          return false;
+        }
+      } else {
+        // 不是最新提交，使用 git rebase -i 修改提交信息
+        // 由于 git rebase -i 是交互式命令，我们需要使用环境变量来避免交互
+        final rebaseResult = await Process.run('git', [
+          'rebase',
+          '-i',
+          '$commitHash^',
+        ], workingDirectory: saveDataPath, environment: {
+          'GIT_EDITOR': 'echo "pick $commitHash $newMessage" >',
+        });
+
+        if (rebaseResult.exitCode != 0) {
+          debugPrint('Git rebase 失败: ${rebaseResult.stderr}');
+          return false;
+        }
+      }
+
+      debugPrint('备份信息修改成功: $commitHash -> $newMessage');
+      return true;
+    } catch (e) {
+      debugPrint('修改备份信息失败: $e');
       return false;
     }
   }

@@ -35,14 +35,6 @@ class AutoBackupService {
   // 返回值：true 表示创建了备份，false 表示跳过了备份，null 表示出错或未启用
   static Future<bool?> checkAndCreateAutoBackup(Game game) async {
     try {
-      // 检查是否启用了自动备份
-      final autoBackupEnabled =
-          await AppDataService.getSetting<bool>('autoBackupEnabled', false) ??
-          false;
-      if (!autoBackupEnabled) {
-        return null; // 未启用自动备份
-      }
-
       // 检查游戏是否配置了存档路径
       if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
         debugPrint('游戏 ${game.title} 未配置存档路径，跳过自动备份');
@@ -137,10 +129,6 @@ class AutoBackupService {
   // 创建自动备份
   static Future<void> _createAutoBackup(Game game) async {
     try {
-      // 获取配置的自动备份数量
-      final maxBackupCount =
-          await AppDataService.getSetting<int>('autoBackupCount', 3) ?? 3;
-
       // 创建新的自动备份
       final backup = await SaveBackupService.createBackup(
         game.id,
@@ -153,8 +141,8 @@ class AutoBackupService {
       } else if (backup != null) {
         debugPrint('自动备份创建成功: ${backup.filePath}');
 
-        // 检查是否需要删除旧备份
-        await _cleanupOldAutoBackups(game.id, maxBackupCount);
+        // 不再限制自动备份数量
+        debugPrint('自动备份创建完成，不限制备份数量');
       } else {
         debugPrint('自动备份创建失败');
       }

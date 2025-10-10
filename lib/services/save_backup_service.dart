@@ -160,4 +160,28 @@ class SaveBackupService {
       return false;
     }
   }
+
+  // 修改备份信息
+  static Future<bool> modifyBackupInfo(
+    SaveBackup backup,
+    String newName,
+  ) async {
+    try {
+      // 使用 Git 修改备份信息
+      final result =  await GitWorktreeService.modifyBackupInfo(
+        backup.filePath,
+        backup.commitHash,
+        newName,
+      );
+      if (!result) {
+        debugPrint('修改备份信息失败');
+        return false;
+      }
+      CloudBackupService.autoUploadToCloud();
+      return true;
+    } catch (e) {
+      debugPrint('修改备份信息失败: $e');
+      return false;
+    }
+  }
 }

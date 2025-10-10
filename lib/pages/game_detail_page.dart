@@ -193,6 +193,83 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
     }
   }
 
+  Future<void> _modifyBackup(SaveBackup backup) async {
+    if (widget.game.saveDataPath == null || widget.game.saveDataPath!.isEmpty) {
+      _showErrorDialog('请先在游戏设置中配置存档路径');
+      return;
+    }
+
+    // 自动备份不允许修改名称
+    if (AutoBackupService.isAutoBackup(backup)) {
+      _showErrorDialog('自动备份不允许修改名称');
+      return;
+    }
+
+    final result = await _showModifyBackupDialog(backup.name);
+    if (result != null && result.isNotEmpty && result != backup.name) {
+      setState(() => _isLoading = true);
+      try {
+        final success = await SaveBackupService.modifyBackupInfo(
+          backup,
+          result,
+        );
+
+        setState(() => _isLoading = false);
+        if (success) {
+          await _loadBackups(); // 重新加载备份列表
+          _showSuccessDialog('备份信息修改成功');
+        } else {
+          _showErrorDialog('备份信息修改失败');
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        _showErrorDialog('备份信息修改失败: $e');
+      }
+    }
+  }
+
+  Future<String?> _showModifyBackupDialog(String currentName) async {
+    final controller = TextEditingController();
+    controller.text = currentName;
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('修改备份信息'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('请输入新的备份名称:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: '备份名称',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                Navigator.of(context).pop(name);
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<bool> _showConfirmDialog(String title, String content) async {
     return await showDialog<bool>(
           context: context,
@@ -951,6 +1028,13 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
               tooltip: '应用备份',
               color: Colors.green,
             ),
+            if (!isAutoBackup)
+              IconButton(
+                onPressed: () => _modifyBackup(backup),
+                icon: const Icon(Icons.edit),
+                tooltip: '修改备份信息',
+                color: Colors.blue,
+              ),
             IconButton(
               onPressed: () => _deleteBackup(backup),
               icon: const Icon(Icons.delete),

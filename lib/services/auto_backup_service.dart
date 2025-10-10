@@ -6,6 +6,7 @@ import 'app_data_service.dart';
 import 'save_backup_service.dart';
 import 'cloud_backup_service.dart';
 import 'git_worktree_service.dart';
+import 'logging_service.dart';
 
 // 备份检查结果
 class BackupCheckResult {
@@ -37,20 +38,20 @@ class AutoBackupService {
     try {
       // 检查游戏是否配置了存档路径
       if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
-        debugPrint('游戏 ${game.title} 未配置存档路径，跳过自动备份');
+        LoggingService.info('游戏 ${game.title} 未配置存档路径，跳过自动备份');
         return null;
       }
 
       final saveDataDir = Directory(game.saveDataPath!);
       if (!await saveDataDir.exists()) {
-        debugPrint('游戏 ${game.title} 存档路径不存在，跳过自动备份');
+        LoggingService.info('游戏 ${game.title} 存档路径不存在，跳过自动备份');
         return null;
       }
 
       // 获取存档目录的最新文件修改时间
       final latestModifyTime = await _getLatestModifyTime(saveDataDir);
       if (latestModifyTime == null) {
-        debugPrint('游戏 ${game.title} 存档目录为空，跳过自动备份');
+        LoggingService.info('游戏 ${game.title} 存档目录为空，跳过自动备份');
         return null;
       }
 
@@ -60,18 +61,18 @@ class AutoBackupService {
       // 如果没有自动备份，或者存档有更新，则创建新的自动备份
       if (latestAutoBackup == null ||
           latestModifyTime.isAfter(latestAutoBackup.createdAt)) {
-        debugPrint(
+        LoggingService.fine(
           'latestAutoBackup: ${latestAutoBackup?.createdAt} $latestModifyTime',
         );
         await _createAutoBackup(game);
-        debugPrint('为游戏 ${game.title} 创建了自动备份');
+        LoggingService.info('为游戏 ${game.title} 创建了自动备份');
         return true; // 成功创建了备份
       } else {
-        debugPrint('未检测到存档目录变更，跳过本次自动备份');
+        LoggingService.info('未检测到存档目录变更，跳过本次自动备份');
         return false; // 跳过了备份
       }
     } catch (e) {
-      debugPrint('检查自动备份失败: $e');
+      LoggingService.logError('检查自动备份失败: $e', e);
       return null; // 出错了
     }
   }
@@ -90,7 +91,7 @@ class AutoBackupService {
         }
       }
     } catch (e) {
-      debugPrint('获取文件修改时间失败: $e');
+      LoggingService.logError('获取文件修改时间失败: $e', e);
     }
 
     return latestTime;
@@ -106,7 +107,7 @@ class AutoBackupService {
           .where((backup) => backup.name == _autoBackupName)
           .toList();
     } catch (e) {
-      debugPrint('获取自动备份列表失败: $e');
+      LoggingService.logError('获取自动备份列表失败: $e', e);
       return [];
     }
   }
@@ -121,7 +122,7 @@ class AutoBackupService {
       autoBackups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return autoBackups.first;
     } catch (e) {
-      debugPrint('获取最新自动备份失败: $e');
+      LoggingService.logError('获取最新自动备份失败: $e', e);
       return null;
     }
   }
@@ -137,17 +138,17 @@ class AutoBackupService {
       );
 
       if (backup == 'NO_CHANGES') {
-        debugPrint('存档没有变更，跳过自动备份');
+        LoggingService.info('存档没有变更，跳过自动备份');
       } else if (backup != null) {
-        debugPrint('自动备份创建成功: ${backup.filePath}');
+        LoggingService.info('自动备份创建成功: ${backup.filePath}');
 
         // 不再限制自动备份数量
-        debugPrint('自动备份创建完成，不限制备份数量');
+        LoggingService.info('自动备份创建完成，不限制备份数量');
       } else {
-        debugPrint('自动备份创建失败');
+        LoggingService.warning('自动备份创建失败');
       }
     } catch (e) {
-      debugPrint('创建自动备份失败: $e');
+      LoggingService.logError('创建自动备份失败: $e', e);
     }
   }
 
@@ -170,12 +171,12 @@ class AutoBackupService {
       for (int i = maxCount; i < autoBackups.length; i++) {
         final oldBackup = autoBackups[i];
         await SaveBackupService.deleteBackup(oldBackup, autoUpload: false);
-        debugPrint('删除旧的自动备份: ${oldBackup.filePath}');
+        LoggingService.info('删除旧的自动备份: ${oldBackup.filePath}');
       }
 
-      debugPrint('清理完成，保留了 $maxCount 个最新的自动备份');
+      LoggingService.info('清理完成，保留了 $maxCount 个最新的自动备份');
     } catch (e) {
-      debugPrint('清理旧自动备份失败: $e');
+      LoggingService.logError('清理旧自动备份失败: $e', e);
     }
   }
 
@@ -212,10 +213,10 @@ class AutoBackupService {
       final autoBackups = await _getAutoBackups(gameId);
       for (final backup in autoBackups) {
         await SaveBackupService.deleteBackup(backup);
-        debugPrint('删除自动备份: ${backup.filePath}');
+        LoggingService.info('删除自动备份: ${backup.filePath}');
       }
     } catch (e) {
-      debugPrint('删除自动备份失败: $e');
+      LoggingService.logError('删除自动备份失败: $e', e);
     }
   }
 
@@ -267,7 +268,7 @@ class AutoBackupService {
 
       // 如果存档目录不存在，说明需要应用自动备份
       if (!await saveDataDir.exists()) {
-        debugPrint('存档目录不存在，建议应用自动备份: ${game.title}');
+        LoggingService.info('存档目录不存在，建议应用自动备份: ${game.title}');
         return BackupCheckResult(
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
@@ -284,7 +285,7 @@ class AutoBackupService {
 
       // 如果存档目录为空，建议应用自动备份
       if (latestModifyTime == null) {
-        debugPrint('存档目录为空，建议应用自动备份: ${game.title}');
+        LoggingService.info('存档目录为空，建议应用自动备份: ${game.title}');
         return BackupCheckResult(
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
@@ -303,10 +304,10 @@ class AutoBackupService {
       // 只有当自动备份比存档目录更新且相差超过1分钟时，才建议应用
       if (autoBackup.createdAt.isAfter(latestModifyTime) &&
           minutesDifference > 1) {
-        debugPrint('自动备份比当前存档更新超过1分钟，建议应用: ${game.title}');
-        debugPrint('自动备份时间: ${autoBackup.createdAt}');
-        debugPrint('存档最新时间: $latestModifyTime');
-        debugPrint('时间差: ${minutesDifference}分钟');
+        LoggingService.info('自动备份比当前存档更新超过1分钟，建议应用: ${game.title}');
+        LoggingService.fine('自动备份时间: ${autoBackup.createdAt}');
+        LoggingService.fine('存档最新时间: $latestModifyTime');
+        LoggingService.fine('时间差: ${minutesDifference}分钟');
 
         return BackupCheckResult(
           shouldApply: true,
@@ -329,7 +330,7 @@ class AutoBackupService {
         shouldPullSaveData: shouldPullSaveData,
       );
     } catch (e) {
-      debugPrint('检查启动前备份应用失败: $e');
+      LoggingService.logError('检查启动前备份应用失败: $e', e);
       return BackupCheckResult(
         shouldApply: false,
         shouldSyncCloud: false,
@@ -355,13 +356,13 @@ class AutoBackupService {
         game.saveDataPath!,
       );
       if (success) {
-        debugPrint('自动备份应用成功: ${game.title}');
+        LoggingService.info('自动备份应用成功: ${game.title}');
       } else {
-        debugPrint('自动备份应用失败: ${game.title}');
+        LoggingService.warning('自动备份应用失败: ${game.title}');
       }
       return success;
     } catch (e) {
-      debugPrint('应用自动备份失败: $e');
+      LoggingService.logError('应用自动备份失败: $e', e);
       return false;
     }
   }
@@ -374,7 +375,7 @@ class AutoBackupService {
       }
 
       if (!await GitWorktreeService.isWorktreeManaged(game.saveDataPath!)) {
-        debugPrint('存档目录未被 git worktree 管理: ${game.saveDataPath}');
+        LoggingService.info('存档目录未被 git worktree 管理: ${game.saveDataPath}');
         return false;
       }
 
@@ -383,13 +384,13 @@ class AutoBackupService {
         game.id,
       );
       if (success) {
-        debugPrint('存档目录 git 更新拉取成功: ${game.title}');
+        LoggingService.info('存档目录 git 更新拉取成功: ${game.title}');
       } else {
-        debugPrint('存档目录 git 更新拉取失败: ${game.title}');
+        LoggingService.warning('存档目录 git 更新拉取失败: ${game.title}');
       }
       return success;
     } catch (e) {
-      debugPrint('拉取存档目录 git 更新失败: $e');
+      LoggingService.logError('拉取存档目录 git 更新失败: $e', e);
       return false;
     }
   }

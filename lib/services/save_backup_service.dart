@@ -4,6 +4,7 @@ import '../models/save_backup.dart';
 import 'app_data_service.dart';
 import 'cloud_backup_service.dart';
 import 'git_worktree_service.dart';
+import 'logging_service.dart';
 
 class SaveBackupService {
   // 创建存档备份
@@ -27,7 +28,7 @@ class SaveBackupService {
           saveDataPath,
         );
         if (!success) {
-          debugPrint('无法为游戏创建 git worktree');
+          LoggingService.instance.warning('无法为游戏创建 git worktree');
           return null;
         }
       }
@@ -42,7 +43,7 @@ class SaveBackupService {
       );
 
       if (commitHash == 'NO_CHANGES') {
-        debugPrint('存档没有变更，无需创建备份');
+        LoggingService.instance.info('存档没有变更，无需创建备份');
         return 'NO_CHANGES';
       } else if (commitHash != null) {
         final backup = SaveBackup.fromGitCommit(
@@ -54,18 +55,18 @@ class SaveBackupService {
           author: 'SA Launcher',
         );
 
-        debugPrint('创建 Git 备份成功: $commitHash');
+        LoggingService.instance.info('创建 Git 备份成功: $commitHash');
 
         // 触发自动推送到 Git 远程仓库
         CloudBackupService.autoUploadToCloud();
 
         return backup;
       } else {
-        debugPrint('Git 备份创建失败');
+        LoggingService.instance.warning('Git 备份创建失败');
         return null;
       }
     } catch (e) {
-      debugPrint('创建备份失败: $e');
+      LoggingService.instance.logError('创建备份失败', e);
       return null;
     }
   }
@@ -82,7 +83,7 @@ class SaveBackupService {
         backup.commitHash,
       );
     } catch (e) {
-      debugPrint('应用备份失败: $e');
+      LoggingService.instance.logError('应用备份失败', e);
       return false;
     }
   }
@@ -119,7 +120,7 @@ class SaveBackupService {
       // 按创建时间倒序排列
       backups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (e) {
-      debugPrint('获取游戏备份失败: $e');
+      LoggingService.instance.logError('获取游戏备份失败', e);
     }
 
     return backups;
@@ -140,7 +141,7 @@ class SaveBackupService {
       // 按创建时间倒序排列
       allBackups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (e) {
-      debugPrint('获取所有备份失败: $e');
+      LoggingService.instance.logError('获取所有备份失败', e);
     }
 
     return allBackups;
@@ -153,10 +154,10 @@ class SaveBackupService {
   }) async {
     try {
       // Git 备份无法单独删除（因为会影响历史）
-      debugPrint('Git 备份无法删除，请使用 git 命令管理历史记录');
+      LoggingService.instance.warning('Git 备份无法删除，请使用 git 命令管理历史记录');
       return false;
     } catch (e) {
-      debugPrint('删除备份失败: $e');
+      LoggingService.instance.logError('删除备份失败', e);
       return false;
     }
   }
@@ -174,13 +175,13 @@ class SaveBackupService {
         newName,
       );
       if (!result) {
-        debugPrint('修改备份信息失败');
+        LoggingService.instance.warning('修改备份信息失败');
         return false;
       }
       CloudBackupService.autoUploadToCloud();
       return true;
     } catch (e) {
-      debugPrint('修改备份信息失败: $e');
+      LoggingService.instance.logError('修改备份信息失败', e);
       return false;
     }
   }

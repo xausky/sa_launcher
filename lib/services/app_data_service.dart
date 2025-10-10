@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/game.dart';
 import '../models/save_backup.dart';
 import 'cloud_sync_config_service.dart';
+import 'logging_service.dart';
 
 class AppDataService {
   static const String _appJsonFileName = 'app.json';
@@ -55,7 +56,7 @@ class AppDataService {
         return jsonDecode(jsonString) as Map<String, dynamic>;
       }
     } catch (e) {
-      print('读取app.json失败: $e');
+      LoggingService.logError('读取app.json失败: $e', e);
     }
     return _getDefaultAppData();
   }
@@ -67,7 +68,7 @@ class AppDataService {
       final jsonString = const JsonEncoder.withIndent('  ').convert(data);
       await appJsonFile.writeAsString(jsonString);
     } catch (e) {
-      print('写入app.json失败: $e');
+      LoggingService.logError('写入app.json失败: $e', e);
     }
   }
 
@@ -100,7 +101,7 @@ class AppDataService {
         }
       }).toList();
     } catch (e) {
-      print('获取游戏列表失败: $e');
+      LoggingService.logError('获取游戏列表失败: $e', e);
       return [];
     }
   }
@@ -126,7 +127,7 @@ class AppDataService {
       }
       await CloudSyncConfigService.setGamePaths(gamePaths);
     } catch (e) {
-      print('保存游戏列表失败: $e');
+      LoggingService.logError('保存游戏列表失败: $e', e);
     }
   }
 

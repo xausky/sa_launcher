@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/game.dart';
 import '../services/game_storage.dart';
 import '../services/cloud_backup_service.dart';
+import '../services/logging_service.dart';
 
 // 游戏列表状态管理
 class GameListNotifier extends AsyncNotifier<List<Game>> {
@@ -38,7 +39,7 @@ class GameListNotifier extends AsyncNotifier<List<Game>> {
   // 更新游戏
   Future<void> updateGame(Game updatedGame) async {
     try {
-      debugPrint('updateGame: ${updatedGame.toJson()}');
+      LoggingService.fine('updateGame: ${updatedGame.toJson()}');
       await GameStorage.updateGame(updatedGame);
       await loadGames(); // 重新加载列表
 

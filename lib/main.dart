@@ -6,9 +6,13 @@ import 'package:window_manager/window_manager.dart';
 import 'pages/home_page.dart';
 import 'services/app_data_service.dart';
 import 'services/git_worktree_service.dart';
+import 'services/logging_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 初始化日志服务
+  await LoggingService.instance.initialize();
   // 初始化window_manager（仅在桌面平台）
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
@@ -27,18 +31,18 @@ void main() async {
 
   // 初始化应用数据目录
   final appDataDir = await AppDataService.getAppDataDirectory();
-  print('AppDataDirectory $appDataDir');
+  LoggingService.instance.info('AppDataDirectory $appDataDir');
 
   // 初始化 Git 仓库
   try {
     final gitInitSuccess = await GitWorktreeService.initMainRepository();
     if (gitInitSuccess) {
-      print('Git 仓库初始化成功');
+      LoggingService.instance.info('Git 仓库初始化成功');
     } else {
-      print('Git 仓库初始化失败');
+      LoggingService.instance.warning('Git 仓库初始化失败');
     }
   } catch (e) {
-    print('Git 仓库初始化异常: $e');
+    LoggingService.instance.logError('Git 仓库初始化异常', e);
   }
 
   runApp(const ProviderScope(child: GameLauncherApp()));

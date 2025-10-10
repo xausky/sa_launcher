@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'app_data_service.dart';
 import 'git_worktree_service.dart';
+import 'logging_service.dart';
 
 class GitRepoConfig {
   final String repoUrl;
@@ -50,7 +51,7 @@ class CloudSyncConfigService {
       }
       return false;
     } catch (e) {
-      debugPrint('验证 Git URL 失败: $e');
+      LoggingService.logError('验证 Git URL 失败: $e', e);
       return false;
     }
   }
@@ -64,7 +65,7 @@ class CloudSyncConfigService {
         return jsonDecode(jsonString) as Map<String, dynamic>;
       }
     } catch (e) {
-      debugPrint('读取 local.json 失败: $e');
+      LoggingService.logError('读取 local.json 失败: $e', e);
     }
     return <String, dynamic>{};
   }
@@ -76,7 +77,7 @@ class CloudSyncConfigService {
       final jsonString = const JsonEncoder.withIndent('  ').convert(config);
       await localJsonFile.writeAsString(jsonString);
     } catch (e) {
-      debugPrint('写入 local.json 失败: $e');
+      LoggingService.logError('写入 local.json 失败: $e', e);
     }
   }
 
@@ -91,7 +92,7 @@ class CloudSyncConfigService {
       }
       return null;
     } catch (e) {
-      debugPrint('获取 Git 仓库配置失败: $e');
+      LoggingService.logError('获取 Git 仓库配置失败: $e', e);
     }
     return null;
   }
@@ -108,14 +109,14 @@ class CloudSyncConfigService {
           repoUrl,
         );
         if (!success) {
-          debugPrint('设置远程仓库地址失败');
+          LoggingService.warning('设置远程仓库地址失败');
         }
       } else {
         // 移除远程仓库
         await GitWorktreeService.removeRemote(appDataDir.path);
       }
     } catch (e) {
-      debugPrint('保存 Git 仓库配置失败: $e');
+      LoggingService.logError('保存 Git 仓库配置失败: $e', e);
     }
   }
 
@@ -134,7 +135,7 @@ class CloudSyncConfigService {
       final appDataDir = await AppDataService.getAppDataDirectory();
       return await GitWorktreeService.hasRemoteConfigured(appDataDir.path);
     } catch (e) {
-      debugPrint('检查 Git 仓库配置失败: $e');
+      LoggingService.logError('检查 Git 仓库配置失败: $e', e);
       return false;
     }
   }
@@ -145,7 +146,7 @@ class CloudSyncConfigService {
       final appDataDir = await AppDataService.getAppDataDirectory();
       await GitWorktreeService.removeRemote(appDataDir.path);
     } catch (e) {
-      debugPrint('清除 Git 仓库配置失败: $e');
+      LoggingService.logError('清除 Git 仓库配置失败: $e', e);
     }
   }
 
@@ -155,7 +156,7 @@ class CloudSyncConfigService {
       final localConfig = await _readLocalConfig();
       return localConfig['autoSync'] as bool? ?? false;
     } catch (e) {
-      debugPrint('获取自动同步配置失败: $e');
+      LoggingService.logError('获取自动同步配置失败: $e', e);
       return false;
     }
   }
@@ -167,7 +168,7 @@ class CloudSyncConfigService {
       localConfig['autoSync'] = enabled;
       await _writeLocalConfig(localConfig);
     } catch (e) {
-      debugPrint('设置自动同步配置失败: $e');
+      LoggingService.logError('设置自动同步配置失败: $e', e);
     }
   }
 
@@ -186,7 +187,7 @@ class CloudSyncConfigService {
         return result;
       }
     } catch (e) {
-      debugPrint('获取游戏路径失败: $e');
+      LoggingService.logError('获取游戏路径失败: $e', e);
     }
     return <String, Map<String, String>>{};
   }
@@ -200,7 +201,7 @@ class CloudSyncConfigService {
       localConfig['gamePaths'] = gamePaths;
       await _writeLocalConfig(localConfig);
     } catch (e) {
-      debugPrint('设置游戏路径失败: $e');
+      LoggingService.logError('设置游戏路径失败: $e', e);
     }
   }
 
@@ -219,7 +220,7 @@ class CloudSyncConfigService {
       gamePaths[gameId] = gamePathData;
       await setGamePaths(gamePaths);
     } catch (e) {
-      debugPrint('保存游戏路径失败: $e');
+      LoggingService.logError('保存游戏路径失败: $e', e);
     }
   }
 
@@ -230,7 +231,7 @@ class CloudSyncConfigService {
       gamePaths.remove(gameId);
       await setGamePaths(gamePaths);
     } catch (e) {
-      debugPrint('删除游戏路径失败: $e');
+      LoggingService.logError('删除游戏路径失败: $e', e);
     }
   }
 

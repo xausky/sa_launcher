@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'app_data_service.dart';
+import 'logging_service.dart';
 
 /// Git Worktree 服务类
 /// 用于管理基于 git worktree 的存档和备份系统
@@ -15,7 +16,7 @@ class GitWorktreeService {
 
       // 如果已经是 git 仓库，直接返回成功
       if (await gitDir.exists()) {
-        debugPrint('Git 仓库已存在: ${appDataDir.path}');
+        LoggingService.instance.info('Git 仓库已存在: ${appDataDir.path}');
         return true;
       }
 
@@ -25,7 +26,7 @@ class GitWorktreeService {
       ], workingDirectory: appDataDir.path);
 
       if (initResult.exitCode != 0) {
-        debugPrint('Git 初始化失败: ${initResult.stderr}');
+        LoggingService.instance.logError('Git 初始化失败: ${initResult.stderr}');
         return false;
       }
 
@@ -41,10 +42,10 @@ class GitWorktreeService {
       // 创建初始提交
       await createMainCommit(appDataDir.path);
 
-      debugPrint('Git 仓库初始化成功: ${appDataDir.path}');
+      LoggingService.instance.info('Git 仓库初始化成功: ${appDataDir.path}');
       return true;
     } catch (e) {
-      debugPrint('初始化 Git 仓库失败: $e');
+      LoggingService.instance.logError('初始化 Git 仓库失败', e);
       return false;
     }
   }
@@ -73,7 +74,7 @@ class GitWorktreeService {
         ], workingDirectory: repoPath);
       }
     } catch (e) {
-      debugPrint('配置 Git 用户信息失败: $e');
+      LoggingService.instance.logError('配置 Git 用户信息失败', e);
     }
   }
 
@@ -94,7 +95,7 @@ class GitWorktreeService {
         'main-update',
       ], workingDirectory: repoPath);
     } catch (e) {
-      debugPrint('创建初始提交失败: $e');
+      LoggingService.instance.logError('创建初始提交失败', e);
     }
   }
 
@@ -116,7 +117,7 @@ class GitWorktreeService {
       }
       return false;
     } catch (e) {
-      debugPrint('检查 worktree 管理状态失败: $e');
+      LoggingService.instance.logError('检查 worktree 管理状态失败', e);
       return false;
     }
   }
@@ -136,7 +137,7 @@ class GitWorktreeService {
 
       // 检查是否已经被管理
       if (await isWorktreeManaged(saveDataPath)) {
-        debugPrint('存档目录已被 worktree 管理: $saveDataPath');
+        LoggingService.instance.info('存档目录已被 worktree 管理: $saveDataPath');
         return true;
       }
 
@@ -162,7 +163,7 @@ class GitWorktreeService {
             worktreePath,
           ], workingDirectory: appDataDir.path);
           if (removeResult.exitCode != 0) {
-            debugPrint('删除已存在的 worktree 失败: ${removeResult.stderr}');
+            LoggingService.instance.logError('删除已存在的 worktree 失败: ${removeResult.stderr}');
             return false;
           }
         }
@@ -178,7 +179,7 @@ class GitWorktreeService {
       ], workingDirectory: appDataDir.path);
 
       if (worktreeResult.exitCode != 0) {
-        debugPrint('创建 worktree 失败: ${worktreeResult.stderr}');
+        LoggingService.instance.logError('创建 worktree 失败: ${worktreeResult.stderr}');
         return false;
       }
 
@@ -187,10 +188,10 @@ class GitWorktreeService {
         return false;
       }
 
-      debugPrint('为游戏 $gameId 创建 worktree 成功');
+      LoggingService.instance.info('为游戏 $gameId 创建 worktree 成功');
       return true;
     } catch (e) {
-      debugPrint('创建 worktree 失败: $e');
+      LoggingService.instance.logError('创建 worktree 失败', e);
       return false;
     }
   }
@@ -232,10 +233,10 @@ class GitWorktreeService {
       // 3. 删除原orktree 目录
       final originalWorktreeDir = Directory(worktreePath);
       await originalWorktreeDir.delete(recursive: true);
-      debugPrint('Worktree 重定向成功: $saveDataPath');
+      LoggingService.instance.info('Worktree 重定向成功: $saveDataPath');
       return true;
     } catch (e) {
-      debugPrint('重定向 worktree 失败: $e');
+      LoggingService.instance.logError('重定向 worktree 失败', e);
       return false;
     }
   }
@@ -249,7 +250,7 @@ class GitWorktreeService {
     try {
       // 检查是否为 git worktree 管理的目录
       if (!await isWorktreeManaged(saveDataPath)) {
-        debugPrint('存档目录未被 git worktree 管理: $saveDataPath');
+        LoggingService.instance.warning('存档目录未被 git worktree 管理: $saveDataPath');
         return null;
       }
 
@@ -260,7 +261,7 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (addResult.exitCode != 0) {
-        debugPrint('Git add 失败: ${addResult.stderr}');
+        LoggingService.instance.logError('Git add 失败: ${addResult.stderr}');
         return null;
       }
 
@@ -271,7 +272,7 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (statusResult.stdout.toString().trim().isEmpty) {
-        debugPrint('没有变更需要提交');
+        LoggingService.instance.info('没有变更需要提交');
         return 'NO_CHANGES';
       }
 
@@ -283,7 +284,7 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (commitResult.exitCode != 0) {
-        debugPrint('Git commit 失败: ${commitResult.stderr}');
+        LoggingService.instance.logError('Git commit 失败: ${commitResult.stderr}');
         return null;
       }
 
@@ -295,13 +296,13 @@ class GitWorktreeService {
 
       if (hashResult.exitCode == 0) {
         final commitHash = hashResult.stdout.toString().trim();
-        debugPrint('备份创建成功，提交 hash: $commitHash');
+        LoggingService.instance.info('备份创建成功，提交 hash: $commitHash');
         return commitHash;
       }
 
       return null;
     } catch (e) {
-      debugPrint('创建 Git 备份失败: $e');
+      LoggingService.instance.logError('创建 Git 备份失败', e);
       return null;
     }
   }
@@ -323,7 +324,7 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath, stdoutEncoding: utf8);
 
       if (logResult.exitCode != 0) {
-        debugPrint('Git log 失败: ${logResult.stderr}');
+        LoggingService.instance.logError('Git log 失败: ${logResult.stderr}');
         return [];
       }
 
@@ -359,7 +360,7 @@ class GitWorktreeService {
 
       return backups;
     } catch (e) {
-      debugPrint('获取备份列表失败: $e');
+      LoggingService.instance.logError('获取备份列表失败', e);
       return [];
     }
   }
@@ -371,7 +372,7 @@ class GitWorktreeService {
   ) async {
     try {
       if (!await isWorktreeManaged(saveDataPath)) {
-        debugPrint('存档目录未被 git worktree 管理: $saveDataPath');
+        LoggingService.instance.warning('存档目录未被 git worktree 管理: $saveDataPath');
         return false;
       }
 
@@ -382,7 +383,7 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (currentHeadResult.exitCode != 0) {
-        debugPrint('获取当前 HEAD 失败: ${currentHeadResult.stderr}');
+        LoggingService.instance.logError('获取当前 HEAD 失败: ${currentHeadResult.stderr}');
         return false;
       }
 
@@ -396,7 +397,7 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (resetHardResult.exitCode != 0) {
-        debugPrint('Git reset --hard 失败: ${resetHardResult.stderr}');
+        LoggingService.instance.logError('Git reset --hard 失败: ${resetHardResult.stderr}');
         return false;
       }
 
@@ -408,14 +409,14 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (resetSoftResult.exitCode != 0) {
-        debugPrint('Git reset --soft 失败: ${resetSoftResult.stderr}');
+        LoggingService.instance.warning('Git reset --soft 失败: ${resetSoftResult.stderr}');
         // 这里失败不算致命错误，因为文件已经恢复了
       }
 
-      debugPrint('备份应用成功: $commitHash');
+      LoggingService.instance.info('备份应用成功: $commitHash');
       return true;
     } catch (e) {
-      debugPrint('应用备份失败: $e');
+      LoggingService.instance.logError('应用备份失败', e);
       return false;
     }
   }
@@ -432,14 +433,14 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (pushResult.exitCode != 0) {
-        debugPrint('Git push 失败: ${pushResult.stderr}');
+        LoggingService.instance.logError('Git push 失败: ${pushResult.stderr}');
         return false;
       }
 
-      debugPrint('推送到云端成功');
+      LoggingService.instance.info('推送到云端成功');
       return true;
     } catch (e) {
-      debugPrint('推送到云端失败: $e');
+      LoggingService.instance.logError('推送到云端失败', e);
       return false;
     }
   }
@@ -455,7 +456,7 @@ class GitWorktreeService {
         'fetch',
       ], workingDirectory: tagrtPath);
       if (fetchResult.exitCode != 0) {
-        debugPrint('Git fetch 失败: ${fetchResult.stderr}');
+        LoggingService.instance.logError('Git fetch 失败: ${fetchResult.stderr}');
         return false;
       }
 
@@ -466,7 +467,7 @@ class GitWorktreeService {
       ], workingDirectory: tagrtPath);
 
       if (branchResult.exitCode != 0) {
-        debugPrint('Git branch 失败: ${branchResult.stderr}');
+        LoggingService.instance.logError('Git branch 失败: ${branchResult.stderr}');
         return false;
       }
 
@@ -476,14 +477,14 @@ class GitWorktreeService {
       ], workingDirectory: tagrtPath);
 
       if (pullResult.exitCode != 0) {
-        debugPrint('Git pull 失败: ${pullResult.stderr}');
+        LoggingService.instance.logError('Git pull 失败: ${pullResult.stderr}');
         return false;
       }
 
-      debugPrint('从云端同步成功');
+      LoggingService.instance.info('从云端同步成功');
       return true;
     } catch (e) {
-      debugPrint('从云端同步失败: $e');
+      LoggingService.instance.logError('从云端同步失败', e);
       return false;
     }
   }
@@ -522,7 +523,7 @@ class GitWorktreeService {
         'behindCount': behindCount,
       };
     } catch (e) {
-      debugPrint('获取 Git 状态失败: $e');
+      LoggingService.instance.logError('获取 Git 状态失败', e);
       return {'managed': false, 'error': e.toString()};
     }
   }
@@ -550,7 +551,7 @@ class GitWorktreeService {
         ], workingDirectory: saveDataPath);
       }
     } catch (e) {
-      debugPrint('添加远程仓库失败: $e');
+      LoggingService.instance.logError('添加远程仓库失败', e);
     }
   }
 
@@ -582,7 +583,7 @@ class GitWorktreeService {
       }
       return null;
     } catch (e) {
-      debugPrint('获取远程仓库地址失败: $e');
+      LoggingService.instance.logError('获取远程仓库地址失败', e);
       return null;
     }
   }
@@ -619,7 +620,7 @@ class GitWorktreeService {
         return addResult.exitCode == 0;
       }
     } catch (e) {
-      debugPrint('设置远程仓库地址失败: $e');
+      LoggingService.instance.logError('设置远程仓库地址失败', e);
       return false;
     }
   }
@@ -635,7 +636,7 @@ class GitWorktreeService {
 
       return result.exitCode == 0;
     } catch (e) {
-      debugPrint('移除远程仓库失败: $e');
+      LoggingService.instance.logError('移除远程仓库失败', e);
       return false;
     }
   }
@@ -651,7 +652,7 @@ class GitWorktreeService {
 
       return result.exitCode == 0;
     } catch (e) {
-      debugPrint('检查远程仓库配置失败: $e');
+      LoggingService.instance.logError('检查远程仓库配置失败: $e');
       return false;
     }
   }
@@ -665,7 +666,7 @@ class GitWorktreeService {
   ) async {
     try {
       if (!await isWorktreeManaged(saveDataPath)) {
-        debugPrint('存档目录未被 git worktree 管理: $saveDataPath');
+        LoggingService.instance.warning('存档目录未被 git worktree 管理: $saveDataPath');
         return false;
       }
 
@@ -676,7 +677,7 @@ class GitWorktreeService {
       ], workingDirectory: saveDataPath);
 
       if (currentHeadResult.exitCode != 0) {
-        debugPrint('获取当前 HEAD 失败: ${currentHeadResult.stderr}');
+        LoggingService.instance.logError('获取当前 HEAD 失败: ${currentHeadResult.stderr}');
         return false;
       }
 
@@ -693,7 +694,7 @@ class GitWorktreeService {
         ], workingDirectory: saveDataPath);
 
         if (amendResult.exitCode != 0) {
-          debugPrint('Git commit amend 失败: ${amendResult.stderr}');
+          LoggingService.instance.logError('Git commit amend 失败: ${amendResult.stderr}');
           return false;
         }
       } else {
@@ -708,15 +709,15 @@ class GitWorktreeService {
         });
 
         if (rebaseResult.exitCode != 0) {
-          debugPrint('Git rebase 失败: ${rebaseResult.stderr}');
+          LoggingService.instance.logError('Git rebase 失败: ${rebaseResult.stderr}');
           return false;
         }
       }
 
-      debugPrint('备份信息修改成功: $commitHash -> $newMessage');
+      LoggingService.instance.logError('备份信息修改成功: $commitHash -> $newMessage');
       return true;
     } catch (e) {
-      debugPrint('修改备份信息失败: $e');
+      LoggingService.instance.logError('修改备份信息失败: $e');
       return false;
     }
   }

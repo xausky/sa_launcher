@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:sa_launcher/services/git_worktree_service.dart';
 import 'cloud_sync_config_service.dart';
 import 'app_data_service.dart';
+import 'logging_service.dart';
 
 enum CloudSyncResult {
   success,
@@ -32,13 +33,13 @@ class CloudBackupService {
       final pushResult = await GitWorktreeService.push(appDataDir.path);
 
       if (!pushResult) {
-        debugPrint('Git push 失败');
+        LoggingService.warning('Git push 失败');
         return CloudSyncResult.uploadError;
       }
-      debugPrint('Git 推送成功');
+      LoggingService.info('Git 推送成功');
       return CloudSyncResult.success;
     } catch (e) {
-      debugPrint('Git 推送失败: $e');
+      LoggingService.logError('Git 推送失败: $e', e);
       return CloudSyncResult.uploadError;
     }
   }
@@ -52,14 +53,14 @@ class CloudBackupService {
       final pullResult = await GitWorktreeService.pull(appDataDir.path, "main");
 
       if (!pullResult) {
-        debugPrint('Git pull 失败');
+        LoggingService.warning('Git pull 失败');
         return CloudSyncResult.downloadError;
       }
 
-      debugPrint('Git 拉取成功');
+      LoggingService.info('Git 拉取成功');
       return CloudSyncResult.success;
     } catch (e) {
-      debugPrint('Git 拉取失败: $e');
+      LoggingService.logError('Git 拉取失败: $e', e);
       return CloudSyncResult.downloadError;
     }
   }
@@ -96,14 +97,14 @@ class CloudBackupService {
       ]);
 
       if (lsRemoteResult.exitCode == 0) {
-        debugPrint('Git 连接测试成功');
+        LoggingService.info('Git 连接测试成功');
         return true;
       } else {
-        debugPrint('Git 连接测试失败: ${lsRemoteResult.stderr}');
+        LoggingService.warning('Git 连接测试失败: ${lsRemoteResult.stderr}');
         return false;
       }
     } catch (e) {
-      debugPrint('测试 Git 连接失败: $e');
+      LoggingService.logError('测试 Git 连接失败: $e', e);
       return false;
     }
   }
@@ -185,17 +186,17 @@ class CloudBackupService {
         return;
       }
 
-      debugPrint('开始自动推送到 Git 远程仓库...');
+      LoggingService.info('开始自动推送到 Git 远程仓库...');
 
       final result = await gitPushToCloud();
 
       if (result == CloudSyncResult.success) {
-        debugPrint('Git 自动推送成功');
+        LoggingService.info('Git 自动推送成功');
       } else if (result != CloudSyncResult.noChanges) {
-        debugPrint('Git 自动推送失败: ${getSyncResultMessage(result)}');
+        LoggingService.warning('Git 自动推送失败: ${getSyncResultMessage(result)}');
       }
     } catch (e) {
-      debugPrint('自动推送异常: $e');
+      LoggingService.logError('自动推送异常: $e', e);
     }
   }
 
@@ -211,7 +212,7 @@ class CloudBackupService {
       final hasGitUpdates = await _hasGitUpdates();
       return hasGitUpdates ?? false;
     } catch (e) {
-      debugPrint('检查云端更新失败: $e');
+      LoggingService.logError('检查云端更新失败: $e', e);
       return false;
     }
   }
@@ -227,7 +228,7 @@ class CloudBackupService {
       ], workingDirectory: appDataDir.path);
 
       if (fetchResult.exitCode != 0) {
-        debugPrint('Git fetch 失败: ${fetchResult.stderr}');
+        LoggingService.warning('Git fetch 失败: ${fetchResult.stderr}');
         return null; // 无法检查，返回 null
       }
 
@@ -246,7 +247,7 @@ class CloudBackupService {
 
       return null;
     } catch (e) {
-      debugPrint('检查 Git 更新失败: $e');
+      LoggingService.logError('检查 Git 更新失败: $e', e);
       return null;
     }
   }

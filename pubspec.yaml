@@ -1,5 +1,5 @@
 name: sa_launcher
-description: "A Game Launche, support auto backup and cloud sync."
+description: "A Game Launcher, support auto backup and cloud sync."
 publish_to: 'none'
 version: 1.1.0
 
@@ -9,18 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # 本地存储
-  shared_preferences: ^2.2.2
-  
   # 文件选择器
   file_picker: ^10.3.3
   
   # 路径处理
   path: ^1.8.3
-  
-  # ZIP压缩和解压
-  archive: ^4.0.7
   
   # 剪切板处理
   super_clipboard: ^0.9.1
@@ -34,14 +27,14 @@ dependencies:
   # 窗口管理
   window_manager: ^0.5.0
 
-  # S3 云存储客户端
-  minio: ^3.5.8
-
   # 国际化和日期格式化
   intl: ^0.20.0
 
   # Windows ETW 进程监控
   event_tracing_windows: ^0.0.1
+
+  # 打开链接
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

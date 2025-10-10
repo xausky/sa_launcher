@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:super_clipboard/super_clipboard.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/game.dart';
 import '../providers/game_provider.dart';
 import '../services/game_storage.dart';
@@ -169,15 +170,27 @@ class _AddGamePageState extends State<AddGamePage> {
     });
   }
 
+  Future<void> _searchGameOnIGDB() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
+      _showErrorDialog('请先输入游戏标题');
+      return;
+    }
+
+    final url = 'https://www.igdb.com/search?q=$title';
+    try {
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } else {
+        _showErrorDialog('无法打开浏览器');
+      }
+    } catch (e) {
+      _showErrorDialog('打开链接失败: $e');
+    }
+  }
+
   bool _handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
-      // Ctrl+Shift+V 粘贴
-      if (event.logicalKey == LogicalKeyboardKey.keyV &&
-          HardwareKeyboard.instance.isControlPressed &&
-          HardwareKeyboard.instance.isShiftPressed) {
-        _pasteImageFromClipboard();
-        return true;
-      }
       // Delete 键删除封面
       if (event.logicalKey == LogicalKeyboardKey.delete &&
           _coverImagePath != null) {
@@ -327,13 +340,14 @@ class _AddGamePageState extends State<AddGamePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // 封面图片预览 - 使用和外部卡片相同的比例
-                          Center(
-                            child: GestureDetector(
-                              onTap: _pickCoverImage,
-                              child: MouseRegion(
-                                cursor: SystemMouseCursors.click,
-                                child: Stack(
+                          // 封面图片预览和操作按钮
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 封面图片预览 - 放在左侧
+                              Expanded(
+                                flex: 2,
+                                child: Container(alignment: Alignment.center,child: Stack(
                                   children: [
                                     Container(
                                       width: 200,
@@ -349,46 +363,37 @@ class _AddGamePageState extends State<AddGamePage> {
                                       ),
                                       child: _coverImagePath != null
                                           ? ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                              child: Image.file(
-                                                File(_coverImagePath!),
-                                                key: ValueKey(_coverImagePath!),
-                                                fit: BoxFit.cover,
-                                                width: 200,
-                                                height: 200 / 0.75,
-                                              ),
-                                            )
+                                        borderRadius:
+                                        BorderRadius.circular(6),
+                                        child: Image.file(
+                                          File(_coverImagePath!),
+                                          key: ValueKey(_coverImagePath!),
+                                          fit: BoxFit.cover,
+                                          width: 200,
+                                          height: 200 / 0.75,
+                                        ),
+                                      )
                                           : const Center(
-                                              child: Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.add_photo_alternate,
-                                                    size: 48,
-                                                    color: Colors.grey,
-                                                  ),
-                                                  SizedBox(height: 8),
-                                                  Text(
-                                                    '点击选择封面图片',
-                                                    style: TextStyle(
-                                                      color: Colors.grey,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                  SizedBox(height: 4),
-                                                  Text(
-                                                    '或按 Ctrl+Shift+V 粘贴图像',
-                                                    style: TextStyle(
-                                                      color: Colors.grey,
-                                                      fontSize: 12,
-                                                    ),
-                                                    textAlign: TextAlign.center,
-                                                  ),
-                                                ],
-                                              ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.add_photo_alternate,
+                                              size: 48,
+                                              color: Colors.grey,
                                             ),
+                                            SizedBox(height: 8),
+                                            Text(
+                                              '暂无封面图片',
+                                              style: TextStyle(
+                                                color: Colors.grey,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                     // 删除按钮（仅在有图片时显示）
                                     if (_coverImagePath != null)
@@ -402,7 +407,7 @@ class _AddGamePageState extends State<AddGamePage> {
                                             decoration: BoxDecoration(
                                               color: Colors.red,
                                               borderRadius:
-                                                  BorderRadius.circular(12),
+                                              BorderRadius.circular(12),
                                             ),
                                             child: const Icon(
                                               Icons.close,
@@ -413,18 +418,46 @@ class _AddGamePageState extends State<AddGamePage> {
                                         ),
                                       ),
                                   ],
-                                ),
+                                ),)
                               ),
-                            ),
+                              const SizedBox(width: 16),
+                              // 操作按钮 - 放在右侧
+                              Expanded(
+                                flex: 1,
+                                child: SizedBox(height: 200/0.75, child: Column(
+                                  mainAxisSize: MainAxisSize.max,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: _pickCoverImage,
+                                      icon: const Icon(Icons.image),
+                                      label: const Text('选择封面'),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    ElevatedButton.icon(
+                                      onPressed: _pasteImageFromClipboard,
+                                      icon: const Icon(Icons.paste),
+                                      label: const Text('粘贴封面'),
+                                    ),
+                                  ],
+                                ),),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 20),
 
                           // 游戏标题
                           TextFormField(
                             controller: _titleController,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: '游戏标题',
-                              border: OutlineInputBorder(),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                onPressed: _searchGameOnIGDB,
+                                icon: const Icon(Icons.search),
+                                tooltip: '在 IGDB 上搜索',
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {

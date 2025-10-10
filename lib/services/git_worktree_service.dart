@@ -32,7 +32,7 @@ class GitWorktreeService {
       await _configureGitUser(appDataDir.path);
 
       // 创建初始提交
-      await _createInitialCommit(appDataDir.path);
+      await createMainCommit(appDataDir.path);
 
       debugPrint('Git 仓库初始化成功: ${appDataDir.path}');
       return true;
@@ -71,29 +71,20 @@ class GitWorktreeService {
   }
 
   /// 创建初始提交
-  static Future<void> _createInitialCommit(String repoPath) async {
+  static Future<void> createMainCommit(String repoPath) async {
     try {
       // 创建 .gitignore 文件
       final gitignoreFile = File(path.join(repoPath, '.gitignore'));
-      await gitignoreFile.writeAsString('''
-# 忽略临时文件
-*.tmp
-*.temp
-*.log
-
-# 忽略系统文件
-.DS_Store
-Thumbs.db
-''');
+      await gitignoreFile.writeAsString('local.json');
 
       // 添加文件到暂存区
       await Process.run('git', ['add', '.'], workingDirectory: repoPath);
 
-      // 创建初始提交
+      // 创建主提交
       await Process.run('git', [
         'commit',
         '-m',
-        'Initial commit',
+        'main-update',
       ], workingDirectory: repoPath);
     } catch (e) {
       debugPrint('创建初始提交失败: $e');
@@ -109,8 +100,14 @@ Thumbs.db
       }
 
       // 检查 .git 文件内容是否指向 worktree
-      final gitContent = await gitFile.readAsString();
-      return gitContent.trim().startsWith('gitdir:');
+      final gitContent = (await gitFile.readAsString())
+          .replaceAll(RegExp(r'[\r\n]'), '')
+          .trim();
+      if (gitContent.startsWith('gitdir:')) {
+        final worktreePath = gitContent.substring(7).trim();
+        return await Directory(worktreePath).exists();
+      }
+      return false;
     } catch (e) {
       debugPrint('检查 worktree 管理状态失败: $e');
       return false;
@@ -236,6 +233,7 @@ Thumbs.db
   }
 
   /// 在存档目录创建备份（git commit）
+  /// 返回值：成功时返回 commit hash，没有变更时返回 'NO_CHANGES'，失败时返回 null
   static Future<String?> createBackup(
     String saveDataPath,
     String message,
@@ -266,7 +264,7 @@ Thumbs.db
 
       if (statusResult.stdout.toString().trim().isEmpty) {
         debugPrint('没有变更需要提交');
-        return null;
+        return 'NO_CHANGES';
       }
 
       // 创建提交
@@ -444,18 +442,36 @@ Thumbs.db
     }
   }
 
-  /// 从云端同步（git pull --all）
-  static Future<bool> pullFromCloud(String saveDataPath) async {
+  /// 从云端同步
+  static Future<bool> pull(String tagrtPath, String branch) async {
     try {
-      if (!await isWorktreeManaged(saveDataPath)) {
+      if (branch != "main" && !await isWorktreeManaged(tagrtPath)) {
+        return false;
+      }
+
+      final fetchResult = await Process.run('git', [
+        'fetch',
+      ], workingDirectory: tagrtPath);
+      if (fetchResult.exitCode != 0) {
+        debugPrint('Git fetch 失败: ${fetchResult.stderr}');
+        return false;
+      }
+
+      final branchResult = await Process.run('git', [
+        'branch',
+        '--set-upstream-to=origin/$branch',
+        branch,
+      ], workingDirectory: tagrtPath);
+
+      if (branchResult.exitCode != 0) {
+        debugPrint('Git branch 失败: ${branchResult.stderr}');
         return false;
       }
 
       // 拉取所有分支
       final pullResult = await Process.run('git', [
         'pull',
-        '--all',
-      ], workingDirectory: saveDataPath);
+      ], workingDirectory: tagrtPath);
 
       if (pullResult.exitCode != 0) {
         debugPrint('Git pull 失败: ${pullResult.stderr}');
@@ -542,18 +558,99 @@ Thumbs.db
       final appDataDir = await AppDataService.getAppDataDirectory();
 
       // 在数据目录执行 git pull --all
-      final pullResult = await Process.run('git', [
-        'pull',
-        '--all',
-      ], workingDirectory: appDataDir.path);
+      final pullResult = await pull(appDataDir.path, "main");
 
-      return {
-        'success': pullResult.exitCode == 0,
-        'output': pullResult.stdout.toString(),
-        'error': pullResult.stderr.toString(),
-      };
+      return {'success': pullResult};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  /// 获取远程仓库地址
+  static Future<String?> getRemoteUrl(String repoPath) async {
+    try {
+      final result = await Process.run('git', [
+        'remote',
+        'get-url',
+        'origin',
+      ], workingDirectory: repoPath);
+
+      if (result.exitCode == 0) {
+        return result.stdout.toString().trim();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('获取远程仓库地址失败: $e');
+      return null;
+    }
+  }
+
+  /// 设置远程仓库地址
+  static Future<bool> setRemoteUrl(String repoPath, String remoteUrl) async {
+    try {
+      // 检查是否已有 origin 远程仓库
+      final checkResult = await Process.run('git', [
+        'remote',
+        'get-url',
+        'origin',
+      ], workingDirectory: repoPath);
+
+      if (checkResult.exitCode == 0) {
+        // 更新现有远程仓库地址
+        final updateResult = await Process.run('git', [
+          'remote',
+          'set-url',
+          'origin',
+          remoteUrl,
+        ], workingDirectory: repoPath);
+
+        return updateResult.exitCode == 0;
+      } else {
+        // 添加新的远程仓库
+        final addResult = await Process.run('git', [
+          'remote',
+          'add',
+          'origin',
+          remoteUrl,
+        ], workingDirectory: repoPath);
+
+        return addResult.exitCode == 0;
+      }
+    } catch (e) {
+      debugPrint('设置远程仓库地址失败: $e');
+      return false;
+    }
+  }
+
+  /// 移除远程仓库
+  static Future<bool> removeRemote(String repoPath) async {
+    try {
+      final result = await Process.run('git', [
+        'remote',
+        'remove',
+        'origin',
+      ], workingDirectory: repoPath);
+
+      return result.exitCode == 0;
+    } catch (e) {
+      debugPrint('移除远程仓库失败: $e');
+      return false;
+    }
+  }
+
+  /// 检查是否已配置远程仓库
+  static Future<bool> hasRemoteConfigured(String repoPath) async {
+    try {
+      final result = await Process.run('git', [
+        'remote',
+        'get-url',
+        'origin',
+      ], workingDirectory: repoPath);
+
+      return result.exitCode == 0;
+    } catch (e) {
+      debugPrint('检查远程仓库配置失败: $e');
+      return false;
     }
   }
 }

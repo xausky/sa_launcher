@@ -76,10 +76,14 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
           result,
         );
 
-        if (backup != null) {
+        if (backup == 'NO_CHANGES') {
+          setState(() => _isLoading = false);
+          _showInfoDialog('存档没有变更，无需创建备份');
+        } else if (backup != null) {
           await _loadBackups();
           _showSuccessDialog('备份创建成功');
         } else {
+          setState(() => _isLoading = false);
           _showErrorDialog('备份创建失败');
         }
       } catch (e) {
@@ -232,6 +236,22 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('成功'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('提示'),
         content: Text(message),
         actions: [
           TextButton(

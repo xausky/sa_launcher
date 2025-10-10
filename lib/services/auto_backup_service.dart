@@ -148,7 +148,9 @@ class AutoBackupService {
         _autoBackupName,
       );
 
-      if (backup != null) {
+      if (backup == 'NO_CHANGES') {
+        debugPrint('存档没有变更，跳过自动备份');
+      } else if (backup != null) {
         debugPrint('自动备份创建成功: ${backup.filePath}');
 
         // 检查是否需要删除旧备份
@@ -388,8 +390,9 @@ class AutoBackupService {
         return false;
       }
 
-      final success = await GitWorktreeService.pullFromCloud(
+      final success = await GitWorktreeService.pull(
         game.saveDataPath!,
+        game.id,
       );
       if (success) {
         debugPrint('存档目录 git 更新拉取成功: ${game.title}');

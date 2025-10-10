@@ -1,46 +1,26 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 import 'app_data_service.dart';
+import 'git_worktree_service.dart';
 
-class CloudSyncConfig {
-  final String endPoint;
-  final String accessKey;
-  final String secretKey;
-  final String bucket;
-  final String objectPath;
+class GitRepoConfig {
+  final String repoUrl;
 
-  const CloudSyncConfig({
-    required this.endPoint,
-    required this.accessKey,
-    required this.secretKey,
-    required this.bucket,
-    required this.objectPath,
-  });
+  const GitRepoConfig({required this.repoUrl});
 
-  factory CloudSyncConfig.fromJson(Map<String, dynamic> json) {
-    return CloudSyncConfig(
-      endPoint: json['endPoint'] as String,
-      accessKey: json['accessKey'] as String,
-      secretKey: json['secretKey'] as String,
-      bucket: json['bucket'] as String,
-      objectPath: json['objectPath'] as String,
-    );
+  factory GitRepoConfig.fromJson(Map<String, dynamic> json) {
+    return GitRepoConfig(repoUrl: json['repoUrl'] as String);
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'endPoint': endPoint,
-      'accessKey': accessKey,
-      'secretKey': secretKey,
-      'bucket': bucket,
-      'objectPath': objectPath,
-    };
+    return {'repoUrl': repoUrl};
   }
 
   @override
   String toString() {
-    return 's3://$accessKey:$secretKey@$endPoint/$bucket/$objectPath';
+    return repoUrl;
   }
 }
 
@@ -53,57 +33,25 @@ class CloudSyncConfigService {
     return File(path.join(appDataDir.path, _localJsonFileName));
   }
 
-  // 从 S3 URL 解析配置信息
-  static CloudSyncConfig? parseS3Url(String s3Url) {
+  // 验证 Git 仓库 URL 格式
+  static bool isValidGitUrl(String gitUrl) {
     try {
-      // 格式: s3://accessKey:secretKey@endPoint/bucket/path
-      if (!s3Url.startsWith('s3://')) {
-        return null;
+      // 支持的格式：
+      // https://username:token@github.com/user/repo.git
+      // https://github.com/user/repo.git
+      // git@github.com:user/repo.git
+      // ssh://git@github.com/user/repo.git
+
+      if (gitUrl.startsWith('https://') ||
+          gitUrl.startsWith('http://') ||
+          gitUrl.startsWith('git@') ||
+          gitUrl.startsWith('ssh://')) {
+        return gitUrl.contains('.git') || gitUrl.contains('/');
       }
-
-      final uri = Uri.parse(s3Url);
-
-      // 解析认证信息
-      final userInfo = uri.userInfo;
-      if (userInfo.isEmpty) {
-        return null;
-      }
-
-      final authParts = userInfo.split(':');
-      if (authParts.length != 2) {
-        return null;
-      }
-
-      final accessKey = authParts[0];
-      final secretKey = authParts[1];
-
-      // 解析主机名（endPoint）
-      final endPoint = uri.host;
-      if (endPoint.isEmpty) {
-        return null;
-      }
-
-      // 解析路径，提取 bucket 和 objectPath
-      final pathSegments = uri.pathSegments;
-      if (pathSegments.isEmpty) {
-        return null;
-      }
-
-      final bucket = pathSegments[0];
-      final objectPath = pathSegments.length > 1
-          ? pathSegments.sublist(1).join('/')
-          : '';
-
-      return CloudSyncConfig(
-        endPoint: endPoint,
-        accessKey: accessKey,
-        secretKey: secretKey,
-        bucket: bucket,
-        objectPath: objectPath,
-      );
+      return false;
     } catch (e) {
-      print('解析 S3 URL 失败: $e');
-      return null;
+      debugPrint('验证 Git URL 失败: $e');
+      return false;
     }
   }
 
@@ -116,7 +64,7 @@ class CloudSyncConfigService {
         return jsonDecode(jsonString) as Map<String, dynamic>;
       }
     } catch (e) {
-      print('读取 local.json 失败: $e');
+      debugPrint('读取 local.json 失败: $e');
     }
     return <String, dynamic>{};
   }
@@ -128,61 +76,77 @@ class CloudSyncConfigService {
       final jsonString = const JsonEncoder.withIndent('  ').convert(config);
       await localJsonFile.writeAsString(jsonString);
     } catch (e) {
-      print('写入 local.json 失败: $e');
+      debugPrint('写入 local.json 失败: $e');
     }
   }
 
-  // 获取云同步配置
-  static Future<CloudSyncConfig?> getCloudSyncConfig() async {
+  // 获取 Git 仓库配置
+  static Future<Map<String, dynamic>?> getGitRepoConfig() async {
     try {
-      final localConfig = await _readLocalConfig();
-      final cloudSyncData = localConfig['cloudSync'] as Map<String, dynamic>?;
+      final appDataDir = await AppDataService.getAppDataDirectory();
+      final remoteUrl = await GitWorktreeService.getRemoteUrl(appDataDir.path);
 
-      if (cloudSyncData != null) {
-        return CloudSyncConfig.fromJson(cloudSyncData);
+      if (remoteUrl != null && remoteUrl.isNotEmpty) {
+        return {'repoUrl': remoteUrl};
       }
+      return null;
     } catch (e) {
-      print('获取云同步配置失败: $e');
+      debugPrint('获取 Git 仓库配置失败: $e');
     }
     return null;
   }
 
-  // 保存云同步配置
-  static Future<void> saveCloudSyncConfig(CloudSyncConfig? config) async {
+  // 保存 Git 仓库配置
+  static Future<void> saveGitRepoConfig(String? repoUrl) async {
     try {
-      final localConfig = await _readLocalConfig();
+      final appDataDir = await AppDataService.getAppDataDirectory();
 
-      if (config != null) {
-        localConfig['cloudSync'] = config.toJson();
+      if (repoUrl != null && repoUrl.isNotEmpty) {
+        // 设置远程仓库地址
+        final success = await GitWorktreeService.setRemoteUrl(
+          appDataDir.path,
+          repoUrl,
+        );
+        if (!success) {
+          debugPrint('设置远程仓库地址失败');
+        }
       } else {
-        localConfig.remove('cloudSync');
+        // 移除远程仓库
+        await GitWorktreeService.removeRemote(appDataDir.path);
       }
-
-      await _writeLocalConfig(localConfig);
     } catch (e) {
-      print('保存云同步配置失败: $e');
+      debugPrint('保存 Git 仓库配置失败: $e');
     }
   }
 
   // 从 URL 字符串保存配置
-  static Future<bool> saveCloudSyncConfigFromUrl(String s3Url) async {
-    final config = parseS3Url(s3Url);
-    if (config != null) {
-      await saveCloudSyncConfig(config);
+  static Future<bool> saveGitRepoConfigFromUrl(String gitUrl) async {
+    if (isValidGitUrl(gitUrl)) {
+      await saveGitRepoConfig(gitUrl);
       return true;
     }
     return false;
   }
 
-  // 检查是否已配置云同步
-  static Future<bool> isCloudSyncConfigured() async {
-    final config = await getCloudSyncConfig();
-    return config != null;
+  // 检查是否已配置 Git 仓库
+  static Future<bool> isGitRepoConfigured() async {
+    try {
+      final appDataDir = await AppDataService.getAppDataDirectory();
+      return await GitWorktreeService.hasRemoteConfigured(appDataDir.path);
+    } catch (e) {
+      debugPrint('检查 Git 仓库配置失败: $e');
+      return false;
+    }
   }
 
-  // 清除云同步配置
-  static Future<void> clearCloudSyncConfig() async {
-    await saveCloudSyncConfig(null);
+  // 清除 Git 仓库配置
+  static Future<void> clearGitRepoConfig() async {
+    try {
+      final appDataDir = await AppDataService.getAppDataDirectory();
+      await GitWorktreeService.removeRemote(appDataDir.path);
+    } catch (e) {
+      debugPrint('清除 Git 仓库配置失败: $e');
+    }
   }
 
   // 获取自动同步配置
@@ -191,7 +155,7 @@ class CloudSyncConfigService {
       final localConfig = await _readLocalConfig();
       return localConfig['autoSync'] as bool? ?? false;
     } catch (e) {
-      print('获取自动同步配置失败: $e');
+      debugPrint('获取自动同步配置失败: $e');
       return false;
     }
   }
@@ -203,7 +167,7 @@ class CloudSyncConfigService {
       localConfig['autoSync'] = enabled;
       await _writeLocalConfig(localConfig);
     } catch (e) {
-      print('设置自动同步配置失败: $e');
+      debugPrint('设置自动同步配置失败: $e');
     }
   }
 
@@ -222,7 +186,7 @@ class CloudSyncConfigService {
         return result;
       }
     } catch (e) {
-      print('获取游戏路径失败: $e');
+      debugPrint('获取游戏路径失败: $e');
     }
     return <String, Map<String, String>>{};
   }
@@ -236,7 +200,7 @@ class CloudSyncConfigService {
       localConfig['gamePaths'] = gamePaths;
       await _writeLocalConfig(localConfig);
     } catch (e) {
-      print('设置游戏路径失败: $e');
+      debugPrint('设置游戏路径失败: $e');
     }
   }
 
@@ -255,7 +219,7 @@ class CloudSyncConfigService {
       gamePaths[gameId] = gamePathData;
       await setGamePaths(gamePaths);
     } catch (e) {
-      print('保存游戏路径失败: $e');
+      debugPrint('保存游戏路径失败: $e');
     }
   }
 
@@ -266,7 +230,19 @@ class CloudSyncConfigService {
       gamePaths.remove(gameId);
       await setGamePaths(gamePaths);
     } catch (e) {
-      print('删除游戏路径失败: $e');
+      debugPrint('删除游戏路径失败: $e');
     }
+  }
+
+  // === 兼容性方法（用于迁移） ===
+
+  // 获取旧的云同步配置（用于迁移）
+  static Future<Map<String, dynamic>?> getCloudSyncConfig() async {
+    return await getGitRepoConfig();
+  }
+
+  // 检查是否已配置云同步（兼容性）
+  static Future<bool> isCloudSyncConfigured() async {
+    return await isGitRepoConfigured();
   }
 }

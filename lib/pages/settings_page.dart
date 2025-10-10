@@ -40,26 +40,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Future<void> _loadSettings() async {
     try {
       final settings = await AppDataService.getSettings();
-      final cloudConfig = await CloudSyncConfigService.getCloudSyncConfig();
+      final gitRepoConfig = await CloudSyncConfigService.getGitRepoConfig();
       final autoSyncEnabled = await CloudSyncConfigService.getAutoSyncEnabled();
 
       setState(() {
         _autoBackupEnabled = settings['autoBackupEnabled'] as bool? ?? false;
         _autoBackupCount = settings['autoBackupCount'] as int? ?? 3;
         _autoSyncEnabled = autoSyncEnabled;
-        _isCloudConfigured = cloudConfig != null;
-        if (cloudConfig != null) {
-          _cloudUrlController.text = cloudConfig.toString();
+        _isCloudConfigured = gitRepoConfig != null;
+        if (gitRepoConfig != null) {
+          _cloudUrlController.text = gitRepoConfig['repoUrl'] ?? '';
         }
         _isLoading = false;
       });
 
-      // 如果已配置云同步，获取同步状态
+      // 如果已配置 Git 仓库，获取同步状态
       if (_isCloudConfigured) {
         _updateSyncStatus();
       }
     } catch (e) {
-      print('加载设置失败: $e');
+      debugPrint('加载设置失败: $e');
       setState(() {
         _isLoading = false;
       });
@@ -134,11 +134,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  // 保存云同步配置
+  // 保存 Git 仓库配置
   Future<void> _saveCloudConfig() async {
-    final url = _cloudUrlController.text.trim();
-    if (url.isEmpty) {
-      await CloudSyncConfigService.clearCloudSyncConfig();
+    final gitUrl = _cloudUrlController.text.trim();
+    if (gitUrl.isEmpty) {
+      await CloudSyncConfigService.clearGitRepoConfig();
       setState(() {
         _isCloudConfigured = false;
         _syncStatus = null;
@@ -146,8 +146,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       return;
     }
 
-    final success = await CloudSyncConfigService.saveCloudSyncConfigFromUrl(
-      url,
+    final success = await CloudSyncConfigService.saveGitRepoConfigFromUrl(
+      gitUrl,
     );
     if (success) {
       setState(() {
@@ -157,7 +157,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('云同步配置已保存'),
+            content: Text('Git 仓库配置已保存'),
             duration: Duration(seconds: 2),
           ),
         );
@@ -166,7 +166,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('云同步配置格式错误，请检查URL格式'),
+            content: Text('Git 仓库地址格式错误，请检查 URL 格式'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 3),
           ),
@@ -497,16 +497,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ),
                         const SizedBox(height: 16),
 
-                        // S3 URL 输入框
+                        // Git 仓库 URL 输入框
                         TextField(
                           controller: _cloudUrlController,
                           decoration: const InputDecoration(
-                            labelText: 'S3 服务器地址',
+                            labelText: 'Git 仓库地址',
                             hintText:
-                                's3://accessKey:secretKey@endpoint/bucket/path',
+                                'https://username:token@github.com/user/repo.git',
                             border: OutlineInputBorder(),
-                            helperText:
-                                '格式: s3://accessKey:secretKey@endpoint/bucket/path',
+                            helperText: '支持 HTTPS 和 SSH 格式的 Git 仓库地址',
                           ),
                           maxLines: 2,
                         ),
@@ -567,7 +566,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                           ),
                                         )
                                       : const Icon(Icons.cloud_upload),
-                                  label: const Text('上传到云端'),
+                                  label: const Text('推送到 Git'),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -585,7 +584,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                                           ),
                                         )
                                       : const Icon(Icons.cloud_download),
-                                  label: const Text('从云端下载'),
+                                  label: const Text('从 Git 拉取'),
                                 ),
                               ),
                             ],
@@ -595,8 +594,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
                           // 自动同步开关
                           SwitchListTile(
-                            title: const Text('自动云同步'),
-                            subtitle: const Text('启用后，在创建备份或修改游戏配置时自动上传到云端'),
+                            title: const Text('自动 Git 同步'),
+                            subtitle: const Text(
+                              '启用后，在创建备份或修改游戏配置时自动推送到 Git 仓库',
+                            ),
                             value: _autoSyncEnabled,
                             onChanged: _isCloudConfigured
                                 ? (value) => _saveAutoSyncSetting(value)

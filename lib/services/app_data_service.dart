@@ -46,16 +46,6 @@ class AppDataService {
     return coversDir;
   }
 
-  // 获取游戏的备份目录
-  static Future<Directory> getGameBackupDirectory(String gameTitle) async {
-    final backupsDir = await getBackupsDirectory();
-    final gameBackupDir = Directory(path.join(backupsDir.path, gameTitle));
-    if (!await gameBackupDir.exists()) {
-      await gameBackupDir.create(recursive: true);
-    }
-    return gameBackupDir;
-  }
-
   // 读取app.json数据
   static Future<Map<String, dynamic>> readAppData() async {
     try {
@@ -167,74 +157,18 @@ class AppDataService {
     await CloudSyncConfigService.removeGamePaths(gameId);
   }
 
-  // 从文件系统扫描获取所有备份
+  // 获取所有备份（现在由 SaveBackupService 处理）
   static Future<List<SaveBackup>> getAllBackups() async {
-    try {
-      final backupsDir = await getBackupsDirectory();
-      final backups = <SaveBackup>[];
-
-      // 遍历所有游戏目录
-      await for (final gameDir in backupsDir.list()) {
-        if (gameDir is Directory) {
-          final gameTitle = path.basename(gameDir.path);
-
-          // 遍历游戏目录下的所有zip文件
-          await for (final backupFile in gameDir.list()) {
-            if (backupFile is File && backupFile.path.endsWith('.zip')) {
-              try {
-                final fileName = path.basename(backupFile.path);
-                final stat = await backupFile.stat();
-
-                // 解码文件名获取备份名称和创建时间
-                final decodedInfo = decodeBackupFileName(fileName);
-                final backupName = decodedInfo['name'] as String;
-                final createdAt =
-                    (decodedInfo['createdAt'] as DateTime?) ?? stat.modified;
-
-                // 生成备份ID（使用创建时间的毫秒数）
-                final backupId = createdAt.millisecondsSinceEpoch.toString();
-
-                // 需要根据游戏标题找到对应的游戏ID
-                final games = await getAllGames();
-                Game? game;
-                try {
-                  game = games.firstWhere((g) => g.title == gameTitle);
-                } catch (e) {
-                  game = null;
-                }
-
-                if (game != null) {
-                  final backup = SaveBackup(
-                    id: backupId,
-                    gameId: game.id,
-                    name: backupName,
-                    filePath: backupFile.path,
-                    createdAt: createdAt,
-                    fileSize: stat.size,
-                  );
-                  backups.add(backup);
-                }
-              } catch (e) {
-                print('解析备份文件失败: ${backupFile.path}, $e');
-              }
-            }
-          }
-        }
-      }
-
-      // 按创建时间倒序排列
-      backups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return backups;
-    } catch (e) {
-      print('扫描备份目录失败: $e');
-      return [];
-    }
+    // 这个方法现在已经被 SaveBackupService.getAllBackups() 替代
+    // 保留这个方法是为了兼容性，但实际上不再使用
+    return [];
   }
 
-  // 获取游戏的所有备份
+  // 获取游戏的所有备份（现在由 SaveBackupService 处理）
   static Future<List<SaveBackup>> getGameBackups(String gameId) async {
-    final allBackups = await getAllBackups();
-    return allBackups.where((backup) => backup.gameId == gameId).toList();
+    // 这个方法现在已经被 SaveBackupService.getGameBackups() 替代
+    // 保留这个方法是为了兼容性，但实际上不再使用
+    return [];
   }
 
   // 获取设置
@@ -257,89 +191,6 @@ class AppDataService {
   static Future<T?> getSetting<T>(String key, [T? defaultValue]) async {
     final settings = await getSettings();
     return settings[key] as T? ?? defaultValue;
-  }
-
-  // 生成备份文件名（格式：<备份名base64Url去除=>-<备份创建时间>.zip）
-  static String generateBackupFileName(String backupName, DateTime createdAt) {
-    if (backupName == 'auto') {
-      // 自动备份格式：auto-<备份创建时间>.zip
-      final timeString = _formatBackupTime(createdAt);
-      return 'auto-$timeString.zip';
-    } else {
-      // 普通备份格式：<备份名base64Url去除=>-<备份创建时间>.zip
-      final encodedName = base64UrlEncode(
-        utf8.encode(backupName),
-      ).replaceAll('=', '');
-      final timeString = _formatBackupTime(createdAt);
-      return '$encodedName-$timeString.zip';
-    }
-  }
-
-  // 格式化备份时间为文件名格式（yyyyMMddHHmmss）
-  static String _formatBackupTime(DateTime dateTime) {
-    return '${dateTime.year}'
-        '${dateTime.month.toString().padLeft(2, '0')}'
-        '${dateTime.day.toString().padLeft(2, '0')}'
-        '${dateTime.hour.toString().padLeft(2, '0')}'
-        '${dateTime.minute.toString().padLeft(2, '0')}'
-        '${dateTime.second.toString().padLeft(2, '0')}';
-  }
-
-  // 从备份文件名解码备份名称和创建时间
-  static Map<String, dynamic> decodeBackupFileName(String fileName) {
-    try {
-      // 移除 .zip 扩展名
-      final nameWithoutExt = fileName.replaceAll('.zip', '');
-
-      if (nameWithoutExt.startsWith('auto-')) {
-        // 自动备份格式：auto-<时间>
-        final timeString = nameWithoutExt.substring(5); // 移除 'auto-'
-        final createdAt = _parseBackupTime(timeString);
-        return {'name': 'auto', 'createdAt': createdAt};
-      } else {
-        // 普通备份格式：<base64名称>-<时间>
-        final lastDashIndex = nameWithoutExt.lastIndexOf('-');
-        if (lastDashIndex == -1 || lastDashIndex == nameWithoutExt.length - 1) {
-          // 如果没有找到分隔符，可能是旧格式，尝试直接解码
-          final bytes = base64Decode(base64.normalize(nameWithoutExt));
-          return {
-            'name': utf8.decode(bytes),
-            'createdAt': null, // 旧格式没有时间信息
-          };
-        }
-
-        final encodedName = nameWithoutExt.substring(0, lastDashIndex);
-        final timeString = nameWithoutExt.substring(lastDashIndex + 1);
-
-        final bytes = base64Decode(base64.normalize(encodedName));
-        final backupName = utf8.decode(bytes);
-        final createdAt = _parseBackupTime(timeString);
-
-        return {'name': backupName, 'createdAt': createdAt};
-      }
-    } catch (e) {
-      print('解码备份文件名失败: $e');
-      return {'name': fileName, 'createdAt': null};
-    }
-  }
-
-  // 解析备份时间字符串（yyyyMMddHHmmss）
-  static DateTime? _parseBackupTime(String timeString) {
-    try {
-      if (timeString.length != 14) return null;
-
-      final year = int.parse(timeString.substring(0, 4));
-      final month = int.parse(timeString.substring(4, 6));
-      final day = int.parse(timeString.substring(6, 8));
-      final hour = int.parse(timeString.substring(8, 10));
-      final minute = int.parse(timeString.substring(10, 12));
-      final second = int.parse(timeString.substring(12, 14));
-
-      return DateTime(year, month, day, hour, minute, second);
-    } catch (e) {
-      print('解析备份时间失败: $e');
-      return null;
-    }
   }
 
   // 根据文件名获取完整的封面路径

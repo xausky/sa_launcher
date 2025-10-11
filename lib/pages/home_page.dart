@@ -10,9 +10,11 @@ import '../providers/game_process_provider.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_backup_service.dart';
+import '../services/git_operation_service.dart';
 import '../services/logging_service.dart';
 import 'add_game_page.dart';
 import 'game_detail_page.dart';
+import 'git_log_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -68,6 +70,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         title: const Text('SALauncher'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          // Git 操作按钮
+          _buildGitOperationButton(context, ref),
           IconButton(
             onPressed: () => _openSettings(context),
             icon: const Icon(Icons.settings),
@@ -400,6 +404,48 @@ class _HomePageState extends ConsumerState<HomePage> {
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
         '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  // 构建 Git 操作按钮
+  Widget _buildGitOperationButton(BuildContext context, WidgetRef ref) {
+    final gitStatus = ref.watch(gitOperationStatusProvider);
+    final isRunning = gitStatus == GitOperationStatus.running;
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // 圆形进度条
+        if (isRunning)
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+        // Git 图标按钮
+        IconButton(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const GitLogPage(),
+              ),
+            );
+          },
+          icon: Icon(
+            Icons.code,
+            color: isRunning
+                ? Theme.of(context).colorScheme.primary
+                : null,
+          ),
+          tooltip: 'Git 操作日志',
+        ),
+      ],
+    );
   }
 }
 

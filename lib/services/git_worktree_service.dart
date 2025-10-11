@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as path;
 import 'app_data_service.dart';
+import 'git_operation_service.dart';
 import 'logging_service.dart';
 
 
@@ -13,6 +15,8 @@ enum OperateResultType {
 /// Git Worktree 服务类
 /// 用于管理基于 git worktree 的存档和备份系统
 class GitWorktreeService {
+  static final GitOperationService _gitOperationService = GitOperationService();
+
   /// 初始化启动器数据目录的 git 仓库
   static Future<bool> initMainRepository() async {
     try {
@@ -26,9 +30,11 @@ class GitWorktreeService {
       }
 
       // 初始化 git 仓库
-      final initResult = await Process.run('git', [
-        'init', '-b', 'main'
-      ], workingDirectory: appDataDir.path);
+      final initResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['init', '-b', 'main'],
+        workingDirectory: appDataDir.path,
+      );
 
       if (initResult.exitCode != 0) {
         LoggingService.instance.logError('Git 初始化失败: ${initResult.stderr}');
@@ -38,11 +44,11 @@ class GitWorktreeService {
       // 配置用户信息（如果没有全局配置）
       await _configureGitUser(appDataDir.path);
 
-      await Process.run('git', [
-        'config',
-        'i18n.logoutputencoding',
-        'utf8',
-      ], workingDirectory: appDataDir.path);
+      await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['config', 'i18n.logoutputencoding', 'utf8'],
+        workingDirectory: appDataDir.path,
+      );
 
       // 创建初始提交
       await createMainCommit(appDataDir.path);
@@ -59,24 +65,25 @@ class GitWorktreeService {
   static Future<void> _configureGitUser(String repoPath) async {
     try {
       // 检查是否已有用户配置
-      final nameResult = await Process.run('git', [
-        'config',
-        'user.name',
-      ], workingDirectory: repoPath);
+      final nameResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['config', 'user.name'],
+        workingDirectory: repoPath,
+      );
 
       if (nameResult.exitCode != 0) {
         // 设置默认用户信息
-        await Process.run('git', [
-          'config',
-          'user.name',
-          'SA Launcher',
-        ], workingDirectory: repoPath);
+        await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['config', 'user.name', 'SA Launcher'],
+          workingDirectory: repoPath,
+        );
 
-        await Process.run('git', [
-          'config',
-          'user.email',
-          'sa-launcher@local',
-        ], workingDirectory: repoPath);
+        await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['config', 'user.email', 'sa-launcher@local'],
+          workingDirectory: repoPath,
+        );
       }
     } catch (e) {
       LoggingService.instance.logError('配置 Git 用户信息失败', e);
@@ -91,14 +98,18 @@ class GitWorktreeService {
       await gitignoreFile.writeAsString('local.json');
 
       // 添加文件到暂存区
-      await Process.run('git', ['add', '.'], workingDirectory: repoPath);
+      await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['add', '.'],
+        workingDirectory: repoPath,
+      );
 
       // 创建主提交
-      await Process.run('git', [
-        'commit',
-        '-m',
-        'main-update',
-      ], workingDirectory: repoPath);
+      await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['commit', '-m', 'main-update'],
+        workingDirectory: repoPath,
+      );
     } catch (e) {
       LoggingService.instance.logError('创建初始提交失败', e);
     }
@@ -146,15 +157,26 @@ class GitWorktreeService {
         return true;
       }
 
+      final gitWorktree = File(path.join(appDataDir.path, '.git', 'worktrees', gameId));
+      if (await gitWorktree.exists()) {
+        await gitWorktree.delete(recursive: true);
+      }
+
       // 创建 worktree 分支和目录
-      final worktreeResult = await Process.run('git', [
-        'worktree',
-        'add',
-        '--orphan',
-        '-B',
-        gameId,
-        gameId,
-      ], workingDirectory: appDataDir.path);
+      var worktreeResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['worktree', 'add', '--orphan', '-B', gameId, gameId],
+        workingDirectory: appDataDir.path,
+      );
+
+      if (worktreeResult.exitCode != 0 && worktreeResult.stderr.toString().contains("already exists")) {
+        // 已经存在对应的本地分支，可能是用户修改了存档路径
+        worktreeResult = await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['worktree', 'add', gameId, gameId],
+          workingDirectory: appDataDir.path,
+        );
+      }
 
       if (worktreeResult.exitCode != 0) {
         LoggingService.instance.logError('创建 worktree 失败: ${worktreeResult.stderr}');
@@ -185,15 +207,18 @@ class GitWorktreeService {
       // 1. 移动 worktree 的 .git 文件
       final appDataDir = await AppDataService.getAppDataDirectory();
       final worktreePath = path.join(appDataDir.path, gameId);
-      await File(path.join(saveDataPath, '.git')).delete(recursive: true);
-      await File(path.join(worktreePath, '.git')).rename(path.join(saveDataPath, '.git'));
+      final saveDataGit = File(path.join(saveDataPath, '.git'));
+      if(await saveDataGit.exists()) {
+        await saveDataGit.delete(recursive: true);
+      }
+      await File(path.join(worktreePath, '.git')).copy(path.join(saveDataPath, '.git'));
 
       // 2. 使用 git worktree repair 修复 worktree 关联
-      final worktreeResult = await Process.run('git', [
-        'worktree',
-        'repair',
-        saveDataPath
-      ], workingDirectory: appDataDir.path);
+      final worktreeResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['worktree', 'repair', saveDataPath],
+        workingDirectory: appDataDir.path,
+      );
 
       if (worktreeResult.exitCode != 0) {
         LoggingService.instance.logError('修复 worktree 失败: ${worktreeResult.stderr}');
@@ -224,10 +249,11 @@ class GitWorktreeService {
       }
 
       // 添加所有变更到暂存区
-      final addResult = await Process.run('git', [
-        'add',
-        '.',
-      ], workingDirectory: saveDataPath);
+      final addResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['add', '.'],
+        workingDirectory: saveDataPath,
+      );
 
       if (addResult.exitCode != 0) {
         LoggingService.instance.logError('Git add 失败: ${addResult.stderr}');
@@ -235,10 +261,11 @@ class GitWorktreeService {
       }
 
       // 检查是否有变更需要提交
-      final statusResult = await Process.start('git', [
-        'status',
-        '--porcelain',
-      ], workingDirectory: saveDataPath);
+      final statusResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['status', '--porcelain'],
+        workingDirectory: saveDataPath,
+      );
 
       if (statusResult.stdout.toString().trim().isEmpty) {
         LoggingService.instance.info('没有变更需要提交');
@@ -246,11 +273,11 @@ class GitWorktreeService {
       }
 
       // 创建提交
-      final commitResult = await Process.run('git', [
-        'commit',
-        '-m',
-        message,
-      ], workingDirectory: saveDataPath);
+      final commitResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['commit', '-m', message],
+        workingDirectory: saveDataPath,
+      );
 
       if (commitResult.exitCode != 0) {
         LoggingService.instance.logError('Git commit 失败: ${commitResult.stderr}');
@@ -258,10 +285,11 @@ class GitWorktreeService {
       }
 
       // 获取最新提交的 hash
-      final hashResult = await Process.run('git', [
-        'rev-parse',
-        'HEAD',
-      ], workingDirectory: saveDataPath);
+      final hashResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['rev-parse', 'HEAD'],
+        workingDirectory: saveDataPath,
+      );
 
       if (hashResult.exitCode == 0) {
         final commitHash = hashResult.stdout.toString().trim();
@@ -286,11 +314,11 @@ class GitWorktreeService {
       }
 
       // 使用 git log 获取提交历史，格式化输出
-      final logResult = await Process.run('git', [
-        'log',
-        '--pretty=format:%H|%s|%ai|%an',
-        '--date=iso',
-      ], workingDirectory: saveDataPath, stdoutEncoding: utf8);
+      final logResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['log', '--pretty=format:%H|%s|%ai|%an', '--date=iso'],
+        workingDirectory: saveDataPath,
+      );
 
       if (logResult.exitCode != 0) {
         LoggingService.instance.logError('Git log 失败: ${logResult.stderr}');
@@ -346,10 +374,11 @@ class GitWorktreeService {
       }
 
       // 获取当前 HEAD 的 hash
-      final currentHeadResult = await Process.run('git', [
-        'rev-parse',
-        'HEAD',
-      ], workingDirectory: saveDataPath);
+      final currentHeadResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['rev-parse', 'HEAD'],
+        workingDirectory: saveDataPath,
+      );
 
       if (currentHeadResult.exitCode != 0) {
         LoggingService.instance.logError('获取当前 HEAD 失败: ${currentHeadResult.stderr}');
@@ -359,11 +388,11 @@ class GitWorktreeService {
       final currentHead = currentHeadResult.stdout.toString().trim();
 
       // 使用 git reset --hard 重置到目标提交
-      final resetHardResult = await Process.run('git', [
-        'reset',
-        '--hard',
-        commitHash,
-      ], workingDirectory: saveDataPath);
+      final resetHardResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['reset', '--hard', commitHash],
+        workingDirectory: saveDataPath,
+      );
 
       if (resetHardResult.exitCode != 0) {
         LoggingService.instance.logError('Git reset --hard 失败: ${resetHardResult.stderr}');
@@ -371,11 +400,11 @@ class GitWorktreeService {
       }
 
       // 使用 git reset --soft 将 HEAD 变更回最新提交
-      final resetSoftResult = await Process.run('git', [
-        'reset',
-        '--soft',
-        currentHead,
-      ], workingDirectory: saveDataPath);
+      final resetSoftResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['reset', '--soft', currentHead],
+        workingDirectory: saveDataPath,
+      );
 
       if (resetSoftResult.exitCode != 0) {
         LoggingService.instance.warning('Git reset --soft 失败: ${resetSoftResult.stderr}');
@@ -394,12 +423,11 @@ class GitWorktreeService {
   static Future<bool> push(String saveDataPath) async {
     try {
       // 推送所有分支
-      final pushResult = await Process.run('git', [
-        'push',
-        '--force-with-lease',
-        '--all',
-        'origin',
-      ], workingDirectory: saveDataPath);
+      final pushResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['push', '--force-with-lease', '--all', 'origin'],
+        workingDirectory: saveDataPath,
+      );
 
       if (pushResult.exitCode != 0) {
         LoggingService.instance.logError('Git push 失败: ${pushResult.stderr}');
@@ -421,28 +449,32 @@ class GitWorktreeService {
         return OperateResultType.error;
       }
 
-      final fetchResult = await Process.run('git', [
-        'fetch', '--filter=blob:none',
-      ], workingDirectory: targetPath);
+      final fetchResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['fetch', '--filter=blob:none'],
+        workingDirectory: targetPath,
+      );
       if (fetchResult.exitCode != 0) {
         LoggingService.instance.logError('git fetch 失败: ${fetchResult.stderr}');
         return OperateResultType.error;
       }
 
-      final branchResult = await Process.run('git', [
-        'branch',
-        '--set-upstream-to=origin/$branch',
-        branch,
-      ], workingDirectory: targetPath);
+      final branchResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['branch', '--set-upstream-to=origin/$branch', branch],
+        workingDirectory: targetPath,
+      );
 
       if (branchResult.exitCode != 0) {
         LoggingService.instance.logError('git branch 失败: ${branchResult.stderr}');
         return OperateResultType.error;
       }
 
-      final merge = await Process.run('git', [
-        'merge', '--ff-only',
-      ], workingDirectory: targetPath);
+      final merge = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['merge', '--ff-only'],
+        workingDirectory: targetPath,
+      );
 
       if(merge.exitCode == 0) {
         return OperateResultType.success;
@@ -454,18 +486,22 @@ class GitWorktreeService {
 
       // 拉取分支
       if (useRemote) {
-        final pullResult = await Process.run('git', [
-          'reset', '--hard', 'origin/$branch'
-        ], workingDirectory: targetPath);
+        final pullResult = await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['reset', '--hard', 'origin/$branch'],
+          workingDirectory: targetPath,
+        );
 
         if (pullResult.exitCode != 0) {
           LoggingService.instance.logError('git reset 失败: ${pullResult.stderr}');
           return OperateResultType.error;
         }
       } else {
-        final pullResult = await Process.run('git', [
-          'reset', '--soft', 'origin/$branch'
-        ], workingDirectory: targetPath);
+        final pullResult = await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['reset', '--soft', 'origin/$branch'],
+          workingDirectory: targetPath,
+        );
 
         if (pullResult.exitCode != 0) {
           LoggingService.instance.logError('git reset 失败: ${pullResult.stderr}');
@@ -489,21 +525,26 @@ class GitWorktreeService {
       }
 
       // 获取状态
-      final statusResult = await Process.run('git', [
-        'status',
-        '--porcelain',
-      ], workingDirectory: saveDataPath);
+      final statusResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['status', '--porcelain'],
+        workingDirectory: saveDataPath,
+      );
 
       final hasChanges = statusResult.stdout.toString().trim().isNotEmpty;
 
       // 检查是否有远程更新
-      await Process.run('git', ['fetch'], workingDirectory: saveDataPath);
+      await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['fetch'],
+        workingDirectory: saveDataPath,
+      );
 
-      final behindResult = await Process.run('git', [
-        'rev-list',
-        '--count',
-        'HEAD..@{u}',
-      ], workingDirectory: saveDataPath);
+      final behindResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['rev-list', '--count', 'HEAD..@{u}'],
+        workingDirectory: saveDataPath,
+      );
 
       final behindCount =
           int.tryParse(behindResult.stdout.toString().trim()) ?? 0;
@@ -527,20 +568,19 @@ class GitWorktreeService {
   ) async {
     try {
       // 检查是否已有 origin 远程仓库
-      final remoteResult = await Process.run('git', [
-        'remote',
-        'get-url',
-        'origin',
-      ], workingDirectory: saveDataPath);
+      final remoteResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['remote', 'get-url', 'origin'],
+        workingDirectory: saveDataPath,
+      );
 
       if (remoteResult.exitCode != 0) {
         // 添加远程仓库
-        await Process.run('git', [
-          'remote',
-          'add',
-          'origin',
-          remoteUrl,
-        ], workingDirectory: saveDataPath);
+        await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['remote', 'add', 'origin', remoteUrl],
+          workingDirectory: saveDataPath,
+        );
       }
     } catch (e) {
       LoggingService.instance.logError('添加远程仓库失败', e);
@@ -550,11 +590,11 @@ class GitWorktreeService {
   /// 获取远程仓库地址
   static Future<String?> getRemoteUrl(String repoPath) async {
     try {
-      final result = await Process.run('git', [
-        'remote',
-        'get-url',
-        'origin',
-      ], workingDirectory: repoPath);
+      final result = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['remote', 'get-url', 'origin'],
+        workingDirectory: repoPath,
+      );
 
       if (result.exitCode == 0) {
         return result.stdout.toString().trim();
@@ -570,30 +610,28 @@ class GitWorktreeService {
   static Future<bool> setRemoteUrl(String repoPath, String remoteUrl) async {
     try {
       // 检查是否已有 origin 远程仓库
-      final checkResult = await Process.run('git', [
-        'remote',
-        'get-url',
-        'origin',
-      ], workingDirectory: repoPath);
+      final checkResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['remote', 'get-url', 'origin'],
+        workingDirectory: repoPath,
+      );
 
       if (checkResult.exitCode == 0) {
         // 更新现有远程仓库地址
-        final updateResult = await Process.run('git', [
-          'remote',
-          'set-url',
-          'origin',
-          remoteUrl,
-        ], workingDirectory: repoPath);
+        final updateResult = await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['remote', 'set-url', 'origin', remoteUrl],
+          workingDirectory: repoPath,
+        );
 
         return updateResult.exitCode == 0;
       } else {
         // 添加新的远程仓库
-        final addResult = await Process.run('git', [
-          'remote',
-          'add',
-          'origin',
-          remoteUrl,
-        ], workingDirectory: repoPath);
+        final addResult = await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['remote', 'add', 'origin', remoteUrl],
+          workingDirectory: repoPath,
+        );
 
         return addResult.exitCode == 0;
       }
@@ -606,11 +644,11 @@ class GitWorktreeService {
   /// 移除远程仓库
   static Future<bool> removeRemote(String repoPath) async {
     try {
-      final result = await Process.run('git', [
-        'remote',
-        'remove',
-        'origin',
-      ], workingDirectory: repoPath);
+      final result = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['remote', 'remove', 'origin'],
+        workingDirectory: repoPath,
+      );
 
       return result.exitCode == 0;
     } catch (e) {
@@ -622,11 +660,11 @@ class GitWorktreeService {
   /// 检查是否已配置远程仓库
   static Future<bool> hasRemoteConfigured(String repoPath) async {
     try {
-      final result = await Process.run('git', [
-        'remote',
-        'get-url',
-        'origin',
-      ], workingDirectory: repoPath);
+      final result = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['remote', 'get-url', 'origin'],
+        workingDirectory: repoPath,
+      );
 
       return result.exitCode == 0;
     } catch (e) {
@@ -649,10 +687,11 @@ class GitWorktreeService {
       }
 
       // 获取当前 HEAD 的 hash
-      final currentHeadResult = await Process.run('git', [
-        'rev-parse',
-        'HEAD',
-      ], workingDirectory: saveDataPath);
+      final currentHeadResult = await _gitOperationService.runGitCommand(
+        command: 'git',
+        args: ['rev-parse', 'HEAD'],
+        workingDirectory: saveDataPath,
+      );
 
       if (currentHeadResult.exitCode != 0) {
         LoggingService.instance.logError('获取当前 HEAD 失败: ${currentHeadResult.stderr}');
@@ -664,12 +703,11 @@ class GitWorktreeService {
       // 判断是否为最新提交
       if (commitHash == currentHead) {
         // 是最新提交，使用 git commit --amend 修改提交信息
-        final amendResult = await Process.run('git', [
-          'commit',
-          '--amend',
-          '-m',
-          newMessage,
-        ], workingDirectory: saveDataPath);
+        final amendResult = await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['commit', '--amend', '-m', newMessage],
+          workingDirectory: saveDataPath,
+        );
 
         if (amendResult.exitCode != 0) {
           LoggingService.instance.logError('Git commit amend 失败: ${amendResult.stderr}');
@@ -678,13 +716,12 @@ class GitWorktreeService {
       } else {
         // 不是最新提交，使用 git rebase -i 修改提交信息
         // 由于 git rebase -i 是交互式命令，我们需要使用环境变量来避免交互
-        final rebaseResult = await Process.run('git', [
-          'rebase',
-          '-i',
-          '$commitHash^',
-        ], workingDirectory: saveDataPath, environment: {
-          'GIT_EDITOR': 'echo "pick $commitHash $newMessage" >',
-        });
+        final rebaseResult = await _gitOperationService.runGitCommand(
+          command: 'git',
+          args: ['rebase', '-i', '$commitHash^'],
+          workingDirectory: saveDataPath,
+          environment: {'GIT_EDITOR': 'echo "pick $commitHash $newMessage" >'},
+        );
 
         if (rebaseResult.exitCode != 0) {
           LoggingService.instance.logError('Git rebase 失败: ${rebaseResult.stderr}');

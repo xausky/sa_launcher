@@ -11,7 +11,6 @@ import 'logging_service.dart';
 // 备份检查结果
 class BackupCheckResult {
   final bool shouldApply;
-  final bool shouldSyncCloud;
   final DateTime? autoBackupTime;
   final DateTime? saveDataTime;
   final String reason;
@@ -20,7 +19,6 @@ class BackupCheckResult {
 
   BackupCheckResult({
     required this.shouldApply,
-    required this.shouldSyncCloud,
     this.autoBackupTime,
     this.saveDataTime,
     required this.reason,
@@ -38,41 +36,31 @@ class AutoBackupService {
     try {
       // 检查游戏是否配置了存档路径
       if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
-        LoggingService.info('游戏 ${game.title} 未配置存档路径，跳过自动备份');
+        LoggingService.instance.info('游戏 ${game.title} 未配置存档路径，跳过自动备份');
         return null;
       }
 
       final saveDataDir = Directory(game.saveDataPath!);
       if (!await saveDataDir.exists()) {
-        LoggingService.info('游戏 ${game.title} 存档路径不存在，跳过自动备份');
+        LoggingService.instance.info('游戏 ${game.title} 存档路径不存在，跳过自动备份');
         return null;
       }
-
-      // 获取存档目录的最新文件修改时间
-      final latestModifyTime = await _getLatestModifyTime(saveDataDir);
-      if (latestModifyTime == null) {
-        LoggingService.info('游戏 ${game.title} 存档目录为空，跳过自动备份');
-        return null;
-      }
-
-      // 获取最新的自动备份
-      final latestAutoBackup = await _getLatestAutoBackup(game.id);
 
       // 如果没有自动备份，或者存档有更新，则创建新的自动备份
-      if (latestAutoBackup == null ||
-          latestModifyTime.isAfter(latestAutoBackup.createdAt)) {
-        LoggingService.fine(
-          'latestAutoBackup: ${latestAutoBackup?.createdAt} $latestModifyTime',
-        );
-        await _createAutoBackup(game);
-        LoggingService.info('为游戏 ${game.title} 创建了自动备份');
-        return true; // 成功创建了备份
-      } else {
-        LoggingService.info('未检测到存档目录变更，跳过本次自动备份');
-        return false; // 跳过了备份
+      final backup = await SaveBackupService.createBackup(
+        game.id,
+        game.saveDataPath!,
+        _autoBackupName,
+      );
+      if(backup == null) {
+        return null;
       }
+      if('NO_CHANGES' == backup) {
+        return false;
+      }
+      return true;
     } catch (e) {
-      LoggingService.logError('检查自动备份失败: $e', e);
+      LoggingService.instance.logError('检查自动备份失败: $e', e);
       return null; // 出错了
     }
   }
@@ -91,93 +79,10 @@ class AutoBackupService {
         }
       }
     } catch (e) {
-      LoggingService.logError('获取文件修改时间失败: $e', e);
+      LoggingService.instance.logError('获取文件修改时间失败: $e', e);
     }
 
     return latestTime;
-  }
-
-  // 获取游戏的所有自动备份
-  static Future<List<SaveBackup>> _getAutoBackups(String gameId) async {
-    try {
-      final gameBackups = await AppDataService.getGameBackups(gameId);
-
-      // 查找所有自动备份（名称为 "auto" 的备份）
-      return gameBackups
-          .where((backup) => backup.name == _autoBackupName)
-          .toList();
-    } catch (e) {
-      LoggingService.logError('获取自动备份列表失败: $e', e);
-      return [];
-    }
-  }
-
-  // 获取最新的自动备份
-  static Future<SaveBackup?> _getLatestAutoBackup(String gameId) async {
-    try {
-      final autoBackups = await _getAutoBackups(gameId);
-      if (autoBackups.isEmpty) return null;
-
-      // 按创建时间倒序排列，返回最新的
-      autoBackups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return autoBackups.first;
-    } catch (e) {
-      LoggingService.logError('获取最新自动备份失败: $e', e);
-      return null;
-    }
-  }
-
-  // 创建自动备份
-  static Future<void> _createAutoBackup(Game game) async {
-    try {
-      // 创建新的自动备份
-      final backup = await SaveBackupService.createBackup(
-        game.id,
-        game.saveDataPath!,
-        _autoBackupName,
-      );
-
-      if (backup == 'NO_CHANGES') {
-        LoggingService.info('存档没有变更，跳过自动备份');
-      } else if (backup != null) {
-        LoggingService.info('自动备份创建成功: ${backup.filePath}');
-
-        // 不再限制自动备份数量
-        LoggingService.info('自动备份创建完成，不限制备份数量');
-      } else {
-        LoggingService.warning('自动备份创建失败');
-      }
-    } catch (e) {
-      LoggingService.logError('创建自动备份失败: $e', e);
-    }
-  }
-
-  // 清理旧的自动备份，保持指定数量
-  static Future<void> _cleanupOldAutoBackups(
-    String gameId,
-    int maxCount,
-  ) async {
-    try {
-      final autoBackups = await _getAutoBackups(gameId);
-
-      if (autoBackups.length <= maxCount) {
-        return; // 数量未超出，无需清理
-      }
-
-      // 按创建时间倒序排列
-      autoBackups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      // 删除超出数量的旧备份
-      for (int i = maxCount; i < autoBackups.length; i++) {
-        final oldBackup = autoBackups[i];
-        await SaveBackupService.deleteBackup(oldBackup, autoUpload: false);
-        LoggingService.info('删除旧的自动备份: ${oldBackup.filePath}');
-      }
-
-      LoggingService.info('清理完成，保留了 $maxCount 个最新的自动备份');
-    } catch (e) {
-      LoggingService.logError('清理旧自动备份失败: $e', e);
-    }
   }
 
   // 检查备份是否为自动备份
@@ -207,191 +112,49 @@ class AutoBackupService {
     return [...autoBackups, ...manualBackups];
   }
 
-  // 删除游戏的所有自动备份
-  static Future<void> deleteAutoBackups(String gameId) async {
-    try {
-      final autoBackups = await _getAutoBackups(gameId);
-      for (final backup in autoBackups) {
-        await SaveBackupService.deleteBackup(backup);
-        LoggingService.info('删除自动备份: ${backup.filePath}');
-      }
-    } catch (e) {
-      LoggingService.logError('删除自动备份失败: $e', e);
-    }
-  }
-
   // 详细检查游戏启动前是否需要应用自动备份
   static Future<BackupCheckResult> checkAutoBackupBeforeLaunch(
     Game game,
+      bool? useRemote
   ) async {
     try {
       // 首先执行启动前的 git 同步检查
-      await GitWorktreeService.checkSyncBeforeLaunch();
+      if(game.saveDataPath == null) {
+        return BackupCheckResult(shouldApply: false, reason: '未配置存档路径');
+      }
 
-      // 检查云端是否有更新（在检查本地自动备份之前）
-      final hasCloudUpdates = await CloudBackupService.hasCloudUpdates();
+      final remote = await GitWorktreeService.getRemoteUrl(game.saveDataPath!);
 
-      // 检查游戏是否配置了存档路径
-      if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
+      if (remote == null) {
+        return BackupCheckResult(shouldApply: false, reason: '未配置远程存档路径');
+      }
+
+      final pull = await GitWorktreeService.pull(game.saveDataPath!, game.id, useRemote);
+
+      if (pull == OperateResultType.success) {
         return BackupCheckResult(
           shouldApply: false,
-          shouldSyncCloud: hasCloudUpdates,
-          reason: '未配置存档路径',
+          reason: '无冲突',
         );
       }
-
-      // 检查存档目录的 git 状态
-      bool hasGitUpdates = false;
-      bool shouldPullSaveData = false;
-
-      if (await GitWorktreeService.isWorktreeManaged(game.saveDataPath!)) {
-        final gitStatus = await GitWorktreeService.getGitStatus(
-          game.saveDataPath!,
-        );
-        hasGitUpdates = gitStatus['hasRemoteUpdates'] ?? false;
-        shouldPullSaveData = hasGitUpdates;
-      }
-
-      // 获取最新的自动备份
-      final autoBackup = await _getLatestAutoBackup(game.id);
-      if (autoBackup == null) {
-        return BackupCheckResult(
-          shouldApply: false,
-          shouldSyncCloud: hasCloudUpdates,
-          reason: '没有可用的自动备份',
-          hasGitUpdates: hasGitUpdates,
-          shouldPullSaveData: shouldPullSaveData,
-        );
-      }
-
-      final saveDataDir = Directory(game.saveDataPath!);
-
-      // 如果存档目录不存在，说明需要应用自动备份
-      if (!await saveDataDir.exists()) {
-        LoggingService.info('存档目录不存在，建议应用自动备份: ${game.title}');
+      if (pull == OperateResultType.conflict) {
         return BackupCheckResult(
           shouldApply: true,
-          autoBackupTime: autoBackup.createdAt,
-          saveDataTime: null,
-          shouldSyncCloud: hasCloudUpdates,
-          reason: '存档目录不存在',
-          hasGitUpdates: hasGitUpdates,
-          shouldPullSaveData: shouldPullSaveData,
+          reason: '存在冲突',
         );
       }
-
-      // 获取存档目录的最新文件修改时间
-      final latestModifyTime = await _getLatestModifyTime(saveDataDir);
-
-      // 如果存档目录为空，建议应用自动备份
-      if (latestModifyTime == null) {
-        LoggingService.info('存档目录为空，建议应用自动备份: ${game.title}');
-        return BackupCheckResult(
-          shouldApply: true,
-          autoBackupTime: autoBackup.createdAt,
-          saveDataTime: null,
-          shouldSyncCloud: hasCloudUpdates,
-          reason: '存档目录为空',
-          hasGitUpdates: hasGitUpdates,
-          shouldPullSaveData: shouldPullSaveData,
-        );
-      }
-
-      // 计算时间差（以分钟为单位）
-      final timeDifference = autoBackup.createdAt.difference(latestModifyTime);
-      final minutesDifference = timeDifference.inMinutes.abs();
-
-      // 只有当自动备份比存档目录更新且相差超过1分钟时，才建议应用
-      if (autoBackup.createdAt.isAfter(latestModifyTime) &&
-          minutesDifference > 1) {
-        LoggingService.info('自动备份比当前存档更新超过1分钟，建议应用: ${game.title}');
-        LoggingService.fine('自动备份时间: ${autoBackup.createdAt}');
-        LoggingService.fine('存档最新时间: $latestModifyTime');
-        LoggingService.fine('时间差: ${minutesDifference}分钟');
-
-        return BackupCheckResult(
-          shouldApply: true,
-          autoBackupTime: autoBackup.createdAt,
-          saveDataTime: latestModifyTime,
-          shouldSyncCloud: hasCloudUpdates,
-          reason: '自动备份更新（相差${minutesDifference}分钟）',
-          hasGitUpdates: hasGitUpdates,
-          shouldPullSaveData: shouldPullSaveData,
-        );
-      }
-
       return BackupCheckResult(
         shouldApply: false,
-        autoBackupTime: autoBackup.createdAt,
-        saveDataTime: latestModifyTime,
-        shouldSyncCloud: hasCloudUpdates,
-        reason: '当前存档已是最新',
-        hasGitUpdates: hasGitUpdates,
-        shouldPullSaveData: shouldPullSaveData,
+        reason: '出现错误',
       );
     } catch (e) {
-      LoggingService.logError('检查启动前备份应用失败: $e', e);
+      LoggingService.instance.logError('检查启动前备份应用失败: $e', e);
       return BackupCheckResult(
         shouldApply: false,
-        shouldSyncCloud: false,
         reason: '检查失败: $e',
         hasGitUpdates: false,
         shouldPullSaveData: false,
       );
-    }
-  }
-
-  // 应用最新的自动备份
-  static Future<bool> applyAutoBackup(Game game) async {
-    try {
-      final autoBackup = await _getLatestAutoBackup(game.id);
-      if (autoBackup == null ||
-          game.saveDataPath == null ||
-          game.saveDataPath!.isEmpty) {
-        return false;
-      }
-
-      final success = await SaveBackupService.applyBackup(
-        autoBackup,
-        game.saveDataPath!,
-      );
-      if (success) {
-        LoggingService.info('自动备份应用成功: ${game.title}');
-      } else {
-        LoggingService.warning('自动备份应用失败: ${game.title}');
-      }
-      return success;
-    } catch (e) {
-      LoggingService.logError('应用自动备份失败: $e', e);
-      return false;
-    }
-  }
-
-  // 拉取存档目录的 git 更新
-  static Future<bool> pullSaveDataUpdates(Game game) async {
-    try {
-      if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
-        return false;
-      }
-
-      if (!await GitWorktreeService.isWorktreeManaged(game.saveDataPath!)) {
-        LoggingService.info('存档目录未被 git worktree 管理: ${game.saveDataPath}');
-        return false;
-      }
-
-      final success = await GitWorktreeService.pull(
-        game.saveDataPath!,
-        game.id,
-      );
-      if (success) {
-        LoggingService.info('存档目录 git 更新拉取成功: ${game.title}');
-      } else {
-        LoggingService.warning('存档目录 git 更新拉取失败: ${game.title}');
-      }
-      return success;
-    } catch (e) {
-      LoggingService.logError('拉取存档目录 git 更新失败: $e', e);
-      return false;
     }
   }
 }

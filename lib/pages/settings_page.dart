@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sa_launcher/services/dialogs.dart';
+import 'package:sa_launcher/services/git_worktree_service.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_sync_config_service.dart';
 import '../services/cloud_backup_service.dart';
@@ -56,7 +58,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _updateSyncStatus();
       }
     } catch (e) {
-      LoggingService.logError('加载设置失败: $e', e);
+      LoggingService.instance.logError('加载设置失败: $e', e);
       setState(() {
         _isLoading = false;
       });
@@ -122,7 +124,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _syncStatus = status;
       });
     } catch (e) {
-      LoggingService.logError('获取同步状态失败: $e', e);
+      LoggingService.instance.logError('获取同步状态失败: $e', e);
     }
   }
 
@@ -261,30 +263,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     try {
       // 首先检查是否需要确认
-      final result = await CloudBackupService.downloadFromCloud();
-
-      if (result == CloudSyncResult.needsConfirmation) {
-        // 需要用户确认，显示对话框
-        final confirmed = await _showConfirmationDialog(
-          title: '确认下载',
-          content: '本地文件比云端文件更新，下载将覆盖本地的新版本。\n\n确定要继续下载吗？',
-        );
-
-        if (!confirmed) {
-          setState(() {
-            _isSyncing = false;
-          });
-          return;
-        }
-
-        // 用户确认后，跳过确认检查重新下载
-        final confirmedResult = await CloudBackupService.downloadFromCloud(
-          skipConfirmation: true,
-        );
-        await _handleDownloadResult(confirmedResult);
-      } else {
-        await _handleDownloadResult(result);
+      final appData = await AppDataService.getAppDataDirectory();
+      final pull = await GitWorktreeService.pull(appData.path, 'main', null);
+      if(pull == OperateResultType.error) {
+        throw Error();
       }
+      if (pull == OperateResultType.conflict) {
+        // 需要用户确认，显示对话框
+        final useRemote = await Dialogs.showSyncCloudDialog(
+          context,
+          '启动器数据'
+        );
+        // 用户确认后，跳过确认检查重新下载
+        final pull = await GitWorktreeService.pull(appData.path, 'main', useRemote);
+        if(pull == OperateResultType.error) {
+          throw Error();
+        }
+      }
+      await _handleDownloadResult();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -353,22 +349,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   // 处理下载结果
-  Future<void> _handleDownloadResult(CloudSyncResult result) async {
-    _handleSyncResult(result, '下载');
+  Future<void> _handleDownloadResult() async {
+// 重新加载应用数据并刷新游戏列表
+    await ref.read(gameListProvider.notifier).loadGames();
 
-    if (result == CloudSyncResult.success) {
-      // 重新加载应用数据并刷新游戏列表
-      await ref.read(gameListProvider.notifier).loadGames();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('配置已同步，游戏列表已刷新'),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('配置已同步，游戏列表已刷新'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 

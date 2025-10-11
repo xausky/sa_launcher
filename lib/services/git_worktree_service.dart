@@ -5,6 +5,11 @@ import 'package:path/path.dart' as path;
 import 'app_data_service.dart';
 import 'logging_service.dart';
 
+
+enum OperateResultType {
+  success, error, conflict
+}
+
 /// Git Worktree 服务类
 /// 用于管理基于 git worktree 的存档和备份系统
 class GitWorktreeService {
@@ -22,7 +27,7 @@ class GitWorktreeService {
 
       // 初始化 git 仓库
       final initResult = await Process.run('git', [
-        'init',
+        'init', '-b', 'main'
       ], workingDirectory: appDataDir.path);
 
       if (initResult.exitCode != 0) {
@@ -142,33 +147,6 @@ class GitWorktreeService {
       }
 
       // 创建 worktree 分支和目录
-      // 如果 worktree 已经存在，先删除
-      final worktreeDir = Directory(
-        path.join(appDataDir.path, '.git', 'worktrees', gameId),
-      );
-      if (await worktreeDir.exists()) {
-        final gitdirFile = File(path.join(worktreeDir.path, 'gitdir'));
-        if (await gitdirFile.exists()) {
-          String worktreePath = (await gitdirFile.readAsString()).trim();
-          // 兼容 gitdir 文件内容可能带有换行和空格
-          worktreePath = worktreePath.replaceAll(RegExp(r'[\r\n]'), '').trim();
-          // 只会是 /.git 结尾
-          if (worktreePath.endsWith('/.git')) {
-            worktreePath = worktreePath.substring(0, worktreePath.length - 5);
-          }
-          final removeResult = await Process.run('git', [
-            'worktree',
-            'remove',
-            '-f',
-            worktreePath,
-          ], workingDirectory: appDataDir.path);
-          if (removeResult.exitCode != 0) {
-            LoggingService.instance.logError('删除已存在的 worktree 失败: ${removeResult.stderr}');
-            return false;
-          }
-        }
-      }
-
       final worktreeResult = await Process.run('git', [
         'worktree',
         'add',
@@ -188,6 +166,8 @@ class GitWorktreeService {
         return false;
       }
 
+      await createBackup(saveDataPath, 'auto-backup');
+
       LoggingService.instance.info('为游戏 $gameId 创建 worktree 成功');
       return true;
     } catch (e) {
@@ -202,37 +182,26 @@ class GitWorktreeService {
     String saveDataPath,
   ) async {
     try {
+      // 1. 移动 worktree 的 .git 文件
       final appDataDir = await AppDataService.getAppDataDirectory();
       final worktreePath = path.join(appDataDir.path, gameId);
-      final worktreeGitDir = path.join(
-        appDataDir.path,
-        '.git',
-        'worktrees',
-        gameId,
-      );
+      await File(path.join(saveDataPath, '.git')).delete(recursive: true);
+      await File(path.join(worktreePath, '.git')).rename(path.join(saveDataPath, '.git'));
 
-      // 确保存档目录存在
-      final saveDataDir = Directory(saveDataPath);
-      if (!await saveDataDir.exists()) {
-        await saveDataDir.create(recursive: true);
+      // 2. 使用 git worktree repair 修复 worktree 关联
+      final worktreeResult = await Process.run('git', [
+        'worktree',
+        'repair',
+        saveDataPath
+      ], workingDirectory: appDataDir.path);
+
+      if (worktreeResult.exitCode != 0) {
+        LoggingService.instance.logError('修复 worktree 失败: ${worktreeResult.stderr}');
+        return false;
       }
 
-      // 1. 更新 .git/worktrees/<gameId>/gitdir 文件
-      final gitdirFile = File(path.join(worktreeGitDir, 'gitdir'));
-      final saveDataGitPath = path
-          .join(saveDataPath, '.git')
-          .replaceAll('\\', '/');
-      await gitdirFile.writeAsString('$saveDataGitPath\n');
-
-      // 2. 在存档目录创建 .git 文件，指向 worktree 目录
-      final saveDataGitFile = File(saveDataGitPath);
-      await saveDataGitFile.writeAsString(
-        'gitdir: $worktreeGitDir\n'.replaceAll('\\', '/'),
-      );
-
-      // 3. 删除原orktree 目录
-      final originalWorktreeDir = Directory(worktreePath);
-      await originalWorktreeDir.delete(recursive: true);
+      // 3. 删除原 worktree 目录
+      await Directory(worktreePath).delete(recursive: true);
       LoggingService.instance.info('Worktree 重定向成功: $saveDataPath');
       return true;
     } catch (e) {
@@ -266,7 +235,7 @@ class GitWorktreeService {
       }
 
       // 检查是否有变更需要提交
-      final statusResult = await Process.run('git', [
+      final statusResult = await Process.start('git', [
         'status',
         '--porcelain',
       ], workingDirectory: saveDataPath);
@@ -446,46 +415,69 @@ class GitWorktreeService {
   }
 
   /// 从云端同步
-  static Future<bool> pull(String tagrtPath, String branch) async {
+  static Future<OperateResultType> pull(String targetPath, String branch, bool? useRemote) async {
     try {
-      if (branch != "main" && !await isWorktreeManaged(tagrtPath)) {
-        return false;
+      if (branch != "main" && !await isWorktreeManaged(targetPath)) {
+        return OperateResultType.error;
       }
 
       final fetchResult = await Process.run('git', [
-        'fetch',
-      ], workingDirectory: tagrtPath);
+        'fetch', '--filter=blob:none',
+      ], workingDirectory: targetPath);
       if (fetchResult.exitCode != 0) {
-        LoggingService.instance.logError('Git fetch 失败: ${fetchResult.stderr}');
-        return false;
+        LoggingService.instance.logError('git fetch 失败: ${fetchResult.stderr}');
+        return OperateResultType.error;
       }
 
       final branchResult = await Process.run('git', [
         'branch',
         '--set-upstream-to=origin/$branch',
         branch,
-      ], workingDirectory: tagrtPath);
+      ], workingDirectory: targetPath);
 
       if (branchResult.exitCode != 0) {
-        LoggingService.instance.logError('Git branch 失败: ${branchResult.stderr}');
-        return false;
+        LoggingService.instance.logError('git branch 失败: ${branchResult.stderr}');
+        return OperateResultType.error;
+      }
+
+      final merge = await Process.run('git', [
+        'merge', '--ff-only',
+      ], workingDirectory: targetPath);
+
+      if(merge.exitCode == 0) {
+        return OperateResultType.success;
+      }
+
+      if (useRemote == null) {
+        return OperateResultType.conflict;
       }
 
       // 拉取分支
-      final pullResult = await Process.run('git', [
-        'pull', '--rebase',
-      ], workingDirectory: tagrtPath);
+      if (useRemote) {
+        final pullResult = await Process.run('git', [
+          'reset', '--hard', 'origin/$branch'
+        ], workingDirectory: targetPath);
 
-      if (pullResult.exitCode != 0) {
-        LoggingService.instance.logError('Git pull 失败: ${pullResult.stderr}');
-        return false;
+        if (pullResult.exitCode != 0) {
+          LoggingService.instance.logError('git reset 失败: ${pullResult.stderr}');
+          return OperateResultType.error;
+        }
+      } else {
+        final pullResult = await Process.run('git', [
+          'reset', '--soft', 'origin/$branch'
+        ], workingDirectory: targetPath);
+
+        if (pullResult.exitCode != 0) {
+          LoggingService.instance.logError('git reset 失败: ${pullResult.stderr}');
+          return OperateResultType.error;
+        }
       }
 
       LoggingService.instance.info('从云端同步成功');
-      return true;
+      return OperateResultType.success;
     } catch (e) {
       LoggingService.instance.logError('从云端同步失败', e);
-      return false;
+      return OperateResultType.error;
     }
   }
 
@@ -552,20 +544,6 @@ class GitWorktreeService {
       }
     } catch (e) {
       LoggingService.instance.logError('添加远程仓库失败', e);
-    }
-  }
-
-  /// 启动前同步检查
-  static Future<Map<String, dynamic>> checkSyncBeforeLaunch() async {
-    try {
-      final appDataDir = await AppDataService.getAppDataDirectory();
-
-      // 在数据目录执行 git pull --all
-      final pullResult = await pull(appDataDir.path, "main");
-
-      return {'success': pullResult};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
     }
   }
 

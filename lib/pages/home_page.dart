@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sa_launcher/models/game_process.dart';
+import 'package:sa_launcher/services/dialogs.dart';
+import 'package:sa_launcher/services/git_worktree_service.dart';
 import '../models/game.dart';
 import '../providers/game_provider.dart';
 import '../providers/game_process_provider.dart';
@@ -49,79 +51,11 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   // 检查云端更新
   Future<void> _checkForCloudUpdates() async {
-    try {
-      final hasUpdates = await CloudBackupService.hasCloudUpdates();
-      if (hasUpdates && mounted) {
-        _showCloudUpdateDialog();
-      }
-    } catch (e) {
-      LoggingService.logError('检查云端更新失败: $e', e);
-    }
-  }
-
-  // 显示云端更新对话框
-  void _showCloudUpdateDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('发现云端更新'),
-          content: const Text('检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('稍后'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _downloadFromCloud();
-              },
-              child: const Text('立即下载'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // 从云端下载
-  Future<void> _downloadFromCloud() async {
-    try {
-      final result = await CloudBackupService.downloadFromCloud(
-        skipConfirmation: true,
-      );
-
-      if (result == CloudSyncResult.success) {
-        // 重新加载游戏列表
-        await ref.read(gameListProvider.notifier).loadGames();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('云端配置下载成功，游戏列表已更新'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else if (result != CloudSyncResult.noChanges) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '下载失败: ${CloudBackupService.getSyncResultMessage(result)}',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('下载失败: $e'), backgroundColor: Colors.red),
-        );
-      }
+    final appData = await AppDataService.getAppDataDirectory();
+    final pull = await GitWorktreeService.pull(appData.path, 'main', null);
+    if (pull == OperateResultType.conflict && mounted) {
+      final useRemote = await Dialogs.showSyncCloudDialog(context, '启动器数据');
+      await GitWorktreeService.pull(appData.path, 'main', useRemote);
     }
   }
 
@@ -231,57 +165,17 @@ class _HomePageState extends ConsumerState<HomePage> {
     try {
       // 检查是否需要应用自动备份
       var checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
-        game,
+        game, null
       );
 
-      if (checkResult.shouldSyncCloud) {
-        final shouldApply = await _showSyncCloudDialog(
-          context,
-          game,
-          checkResult,
-        );
-        if (shouldApply == true) {
-          await CloudBackupService.downloadFromCloud(skipConfirmation: true);
-          checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
-            game,
-          );
-        }
-      }
-
-      // 检查存档目录是否有 git 更新
-      if (checkResult.shouldPullSaveData) {
-        final shouldPull = await _showSaveDataGitUpdateDialog(
-          context,
-          game,
-          checkResult,
-        );
-        if (shouldPull == true) {
-          final pullSuccess = await AutoBackupService.pullSaveDataUpdates(game);
-          if (!pullSuccess) {
-            _showErrorDialog(context, '拉取存档更新失败');
-            return;
-          }
-          // 重新检查备份状态
-          checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
-            game,
-          );
-        }
-      }
-
       if (checkResult.shouldApply) {
-        final shouldApply = await _showAutoBackupDialog(
+        final useRemote = await Dialogs.showSyncCloudDialog(
           context,
-          game,
-          checkResult,
+          game.title,
         );
-        if (shouldApply == true) {
-          // 显示应用备份的进度对话框
-          final applySuccess = await _showApplyBackupProgress(context, game);
-          if (!applySuccess) {
-            _showErrorDialog(context, '应用自动备份失败');
-            return;
-          }
-        }
+        await AutoBackupService.checkAutoBackupBeforeLaunch(
+            game, useRemote
+        );
       }
 
       // 启动游戏
@@ -294,112 +188,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     } catch (e) {
       _showErrorDialog(context, '启动游戏失败: $e');
     }
-  }
-
-  Future<bool?> _showSyncCloudDialog(
-    BuildContext context,
-    Game game,
-    BackupCheckResult checkResult,
-  ) async {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('发现云端更新'),
-        content: const Text('检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('不需要同步'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('下载最新版本'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 显示存档目录 Git 更新对话框
-  Future<bool?> _showSaveDataGitUpdateDialog(
-    BuildContext context,
-    Game game,
-    BackupCheckResult checkResult,
-  ) async {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.sync, color: Colors.blue[600]),
-            const SizedBox(width: 12),
-            const Text('发现存档更新'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '游戏 "${game.title}" 的存档目录检测到远程更新。',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.info_outline,
-                        size: 16,
-                        color: Colors.blue[600],
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Git 同步信息',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '存档目录使用 Git 进行版本管理，检测到远程仓库有新的提交。'
-                    '建议在启动游戏前拉取最新的存档数据。',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              '是否要拉取最新的存档数据？',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('跳过'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('拉取更新'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _addGame(BuildContext context, WidgetRef ref) async {
@@ -591,42 +379,6 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
       ),
     );
-  }
-
-  // 显示应用备份进度对话框
-  Future<bool> _showApplyBackupProgress(BuildContext context, Game game) async {
-    bool success = false;
-
-    // 显示进度对话框
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('正在应用自动备份'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text('正在应用游戏 "${game.title}" 的自动备份...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      // 异步执行备份应用
-      success = await AutoBackupService.applyAutoBackup(game);
-    } catch (e) {
-      success = false;
-    } finally {
-      // 关闭进度对话框
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-    }
-
-    return success;
   }
 
   void _showErrorDialog(BuildContext context, String message) {

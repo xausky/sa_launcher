@@ -9,7 +9,6 @@ import 'logging_service.dart';
 
 class AppDataService {
   static const String _appJsonFileName = 'app.json';
-  static const String _backupsDirName = 'backups';
   static const String _gameCoversDir = 'covers';
 
   // 获取应用数据目录
@@ -25,16 +24,6 @@ class AppDataService {
   static Future<File> _getAppJsonFile() async {
     final appDataDir = await getAppDataDirectory();
     return File(path.join(appDataDir.path, _appJsonFileName));
-  }
-
-  // 获取备份目录
-  static Future<Directory> getBackupsDirectory() async {
-    final appDataDir = await getAppDataDirectory();
-    final backupsDir = Directory(path.join(appDataDir.path, _backupsDirName));
-    if (!await backupsDir.exists()) {
-      await backupsDir.create(recursive: true);
-    }
-    return backupsDir;
   }
 
   // 获取游戏封面目录
@@ -56,7 +45,7 @@ class AppDataService {
         return jsonDecode(jsonString) as Map<String, dynamic>;
       }
     } catch (e) {
-      LoggingService.logError('读取app.json失败: $e', e);
+      LoggingService.instance.logError('读取app.json失败: $e', e);
     }
     return _getDefaultAppData();
   }
@@ -68,7 +57,7 @@ class AppDataService {
       final jsonString = const JsonEncoder.withIndent('  ').convert(data);
       await appJsonFile.writeAsString(jsonString);
     } catch (e) {
-      LoggingService.logError('写入app.json失败: $e', e);
+      LoggingService.instance.logError('写入app.json失败: $e', e);
     }
   }
 
@@ -101,7 +90,7 @@ class AppDataService {
         }
       }).toList();
     } catch (e) {
-      LoggingService.logError('获取游戏列表失败: $e', e);
+      LoggingService.instance.logError('获取游戏列表失败: $e', e);
       return [];
     }
   }
@@ -127,7 +116,7 @@ class AppDataService {
       }
       await CloudSyncConfigService.setGamePaths(gamePaths);
     } catch (e) {
-      LoggingService.logError('保存游戏列表失败: $e', e);
+      LoggingService.instance.logError('保存游戏列表失败: $e', e);
     }
   }
 
@@ -156,20 +145,6 @@ class AppDataService {
 
     // 同时删除本地路径数据
     await CloudSyncConfigService.removeGamePaths(gameId);
-  }
-
-  // 获取所有备份（现在由 SaveBackupService 处理）
-  static Future<List<SaveBackup>> getAllBackups() async {
-    // 这个方法现在已经被 SaveBackupService.getAllBackups() 替代
-    // 保留这个方法是为了兼容性，但实际上不再使用
-    return [];
-  }
-
-  // 获取游戏的所有备份（现在由 SaveBackupService 处理）
-  static Future<List<SaveBackup>> getGameBackups(String gameId) async {
-    // 这个方法现在已经被 SaveBackupService.getGameBackups() 替代
-    // 保留这个方法是为了兼容性，但实际上不再使用
-    return [];
   }
 
   // 获取设置

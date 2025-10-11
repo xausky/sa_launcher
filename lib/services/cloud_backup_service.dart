@@ -33,34 +33,38 @@ class CloudBackupService {
       final pushResult = await GitWorktreeService.push(appDataDir.path);
 
       if (!pushResult) {
-        LoggingService.warning('Git push 失败');
+        LoggingService.instance.warning('Git push 失败');
         return CloudSyncResult.uploadError;
       }
-      LoggingService.info('Git 推送成功');
+      LoggingService.instance.info('Git 推送成功');
       return CloudSyncResult.success;
     } catch (e) {
-      LoggingService.logError('Git 推送失败: $e', e);
+      LoggingService.instance.logError('Git 推送失败: $e', e);
       return CloudSyncResult.uploadError;
     }
   }
 
   // Git 云同步：从远程仓库拉取
-  static Future<CloudSyncResult> gitPullFromCloud() async {
+  static Future<CloudSyncResult> gitPullFromCloud(bool? useRemote) async {
     try {
       final appDataDir = await AppDataService.getAppDataDirectory();
 
       // 拉取所有分支
-      final pullResult = await GitWorktreeService.pull(appDataDir.path, "main");
+      final pull = await GitWorktreeService.pull(appDataDir.path, "main", useRemote);
 
-      if (!pullResult) {
-        LoggingService.warning('Git pull 失败');
+      if(pull == OperateResultType.conflict) {
+        return CloudSyncResult.needsConfirmation;
+      }
+
+      if (pull != OperateResultType.success) {
+        LoggingService.instance.warning('Git pull 失败');
         return CloudSyncResult.downloadError;
       }
 
-      LoggingService.info('Git 拉取成功');
+      LoggingService.instance.info('Git 拉取成功');
       return CloudSyncResult.success;
     } catch (e) {
-      LoggingService.logError('Git 拉取失败: $e', e);
+      LoggingService.instance.logError('Git 拉取失败: $e', e);
       return CloudSyncResult.downloadError;
     }
   }
@@ -74,9 +78,9 @@ class CloudBackupService {
 
   // 从云端下载（Git 拉取）
   static Future<CloudSyncResult> downloadFromCloud({
-    bool skipConfirmation = false,
+    bool? useRemote,
   }) async {
-    return await gitPullFromCloud();
+    return await gitPullFromCloud(useRemote);
   }
 
   // 测试 Git 连接
@@ -97,14 +101,14 @@ class CloudBackupService {
       ]);
 
       if (lsRemoteResult.exitCode == 0) {
-        LoggingService.info('Git 连接测试成功');
+        LoggingService.instance.info('Git 连接测试成功');
         return true;
       } else {
-        LoggingService.warning('Git 连接测试失败: ${lsRemoteResult.stderr}');
+        LoggingService.instance.warning('Git 连接测试失败: ${lsRemoteResult.stderr}');
         return false;
       }
     } catch (e) {
-      LoggingService.logError('测试 Git 连接失败: $e', e);
+      LoggingService.instance.logError('测试 Git 连接失败: $e', e);
       return false;
     }
   }
@@ -186,69 +190,17 @@ class CloudBackupService {
         return;
       }
 
-      LoggingService.info('开始自动推送到 Git 远程仓库...');
+      LoggingService.instance.info('开始自动推送到 Git 远程仓库...');
 
       final result = await gitPushToCloud();
 
       if (result == CloudSyncResult.success) {
-        LoggingService.info('Git 自动推送成功');
+        LoggingService.instance.info('Git 自动推送成功');
       } else if (result != CloudSyncResult.noChanges) {
-        LoggingService.warning('Git 自动推送失败: ${getSyncResultMessage(result)}');
+        LoggingService.instance.warning('Git 自动推送失败: ${getSyncResultMessage(result)}');
       }
     } catch (e) {
-      LoggingService.logError('自动推送异常: $e', e);
-    }
-  }
-
-  // 检查云端是否有更新（用于启动时检查）
-  static Future<bool> hasCloudUpdates() async {
-    try {
-      // 检查是否配置了 Git 仓库
-      final isConfigured = await CloudSyncConfigService.isGitRepoConfigured();
-      if (!isConfigured) {
-        return false;
-      }
-
-      final hasGitUpdates = await _hasGitUpdates();
-      return hasGitUpdates ?? false;
-    } catch (e) {
-      LoggingService.logError('检查云端更新失败: $e', e);
-      return false;
-    }
-  }
-
-  // 检查 Git 远程仓库是否有更新
-  static Future<bool?> _hasGitUpdates() async {
-    try {
-      final appDataDir = await AppDataService.getAppDataDirectory();
-
-      // 执行 git fetch 获取远程更新
-      final fetchResult = await Process.run('git', [
-        'fetch',
-      ], workingDirectory: appDataDir.path);
-
-      if (fetchResult.exitCode != 0) {
-        LoggingService.warning('Git fetch 失败: ${fetchResult.stderr}');
-        return null; // 无法检查，返回 null
-      }
-
-      // 检查是否落后于远程分支
-      final behindResult = await Process.run('git', [
-        'rev-list',
-        '--count',
-        'HEAD..@{u}',
-      ], workingDirectory: appDataDir.path);
-
-      if (behindResult.exitCode == 0) {
-        final behindCount =
-            int.tryParse(behindResult.stdout.toString().trim()) ?? 0;
-        return behindCount > 0;
-      }
-
-      return null;
-    } catch (e) {
-      LoggingService.logError('检查 Git 更新失败: $e', e);
-      return null;
+      LoggingService.instance.logError('自动推送异常: $e', e);
     }
   }
 

@@ -98,8 +98,10 @@ class SaveBackupService {
       final game = games.firstWhere((g) => g.id == gameId);
 
       // 如果游戏有存档路径且被 git worktree 管理，获取 git 备份
-      if (game.saveDataPath != null &&
-          await GitWorktreeService.isWorktreeManaged(game.saveDataPath!)) {
+      if (game.saveDataPath != null && await Directory(game.saveDataPath!).exists()) {
+        if(!await GitWorktreeService.isWorktreeManaged(game.saveDataPath!)) {
+          await GitWorktreeService.createWorktreeForGame(gameId, game.saveDataPath!);
+        }
         final gitBackups = await GitWorktreeService.getBackupList(
           game.saveDataPath!,
         );

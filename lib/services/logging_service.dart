@@ -22,7 +22,7 @@ class LoggingService {
     
     // 获取临时目录
     final tempDir = await getTemporaryDirectory();
-    final logFilePath = path.join(tempDir.path, 'sa_launcher-${DateTime.now().toIso8601String()}.log');
+    final logFilePath = path.join(tempDir.path, 'sa_launcher-${DateTime.now().microsecondsSinceEpoch}.log');
     _logFile = File(logFilePath);
     
     // 创建日志文件（如果不存在）

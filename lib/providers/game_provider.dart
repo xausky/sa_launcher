@@ -39,7 +39,7 @@ class GameListNotifier extends AsyncNotifier<List<Game>> {
   // 更新游戏
   Future<void> updateGame(Game updatedGame) async {
     try {
-      LoggingService.fine('updateGame: ${updatedGame.toJson()}');
+      LoggingService.instance.fine('updateGame: ${updatedGame.toJson()}');
       await GameStorage.updateGame(updatedGame);
       await loadGames(); // 重新加载列表
 

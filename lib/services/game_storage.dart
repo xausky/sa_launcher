@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 import '../models/game.dart';
 import 'app_data_service.dart';
+import 'logging_service.dart';
 
 class GameStorage {
   static Future<List<Game>> getGames() async {
@@ -56,7 +57,7 @@ class GameStorage {
       }
     } catch (e) {
       // 忽略删除错误
-      print('删除封面文件失败: $e');
+      LoggingService.instance.info('删除封面文件失败: $e');
     }
   }
 }

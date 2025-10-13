@@ -29,7 +29,7 @@ class GameProcessNotifier extends Notifier<Map<String, GameProcessInfo>> {
 
   // 启动游戏
   Future<bool> launchGame(String gameId, String executablePath) async {
-    final success = await _processManager.launchGame(gameId, executablePath);
+    final success = await _processManager.launchGame(ref, gameId, executablePath);
     if (success) {
       _updateState();
     }

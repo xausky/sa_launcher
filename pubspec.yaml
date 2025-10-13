@@ -36,6 +36,9 @@ dependencies:
   # 打开链接
   url_launcher: ^6.3.2
 
+  # 日志
+  logging: ^1.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

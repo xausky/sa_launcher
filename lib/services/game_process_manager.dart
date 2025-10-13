@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as path;
 import 'package:event_tracing_windows/event_tracing_windows.dart';
 import '../models/game_process.dart';
@@ -7,6 +8,7 @@ import '../models/game.dart';
 import '../models/file_modification.dart';
 import '../services/app_data_service.dart';
 import '../services/auto_backup_service.dart';
+import 'logging_service.dart';
 
 class GameProcessManager {
   static final GameProcessManager _instance = GameProcessManager._internal();
@@ -36,7 +38,7 @@ class GameProcessManager {
   }
 
   // 启动游戏并开始监控
-  Future<bool> launchGame(String gameId, String executablePath) async {
+  Future<bool> launchGame(Ref ref, String gameId, String executablePath) async {
     try {
       final file = File(executablePath);
       if (!await file.exists()) {
@@ -68,7 +70,7 @@ class GameProcessManager {
 
       return true;
     } catch (e) {
-      print('启动游戏失败: $e');
+      LoggingService.instance.info('启动游戏失败: $e');
       return false;
     }
   }
@@ -116,7 +118,7 @@ class GameProcessManager {
 
       return true;
     } catch (e) {
-      print('启动游戏失败: $e');
+      LoggingService.instance.info('启动游戏失败: $e');
       return false;
     }
   }
@@ -130,7 +132,7 @@ class GameProcessManager {
       // 启动 ETW 进程监控
       final success = await _etw.startProcessMonitoring();
       if (!success) {
-        print('启动 ETW 进程监控失败，可能需要管理员权限');
+        LoggingService.instance.info('启动 ETW 进程监控失败，可能需要管理员权限');
         return;
       }
 
@@ -141,7 +143,7 @@ class GameProcessManager {
         _handleProcessEvent(event);
       });
     } catch (e) {
-      print('启动进程监控失败: $e');
+      LoggingService.instance.info('启动进程监控失败: $e');
     }
   }
 
@@ -154,7 +156,7 @@ class GameProcessManager {
       // 启动 ETW 文件监控
       final success = await _etw.startFileMonitoring();
       if (!success) {
-        print('启动 ETW 文件监控失败，可能需要管理员权限');
+        LoggingService.instance.info('启动 ETW 文件监控失败，可能需要管理员权限');
         return;
       }
 
@@ -165,7 +167,7 @@ class GameProcessManager {
         _handleFileEvent(event);
       });
     } catch (e) {
-      print('启动文件监控失败: $e');
+      LoggingService.instance.info('启动文件监控失败: $e');
     }
   }
 
@@ -268,7 +270,7 @@ class GameProcessManager {
       await _etw.stopProcessMonitoring();
       _isMonitoring = false;
     } catch (e) {
-      print('停止进程监控失败: $e');
+      LoggingService.instance.info('停止进程监控失败: $e');
     }
   }
 
@@ -283,7 +285,7 @@ class GameProcessManager {
       await _etw.stopFileMonitoring();
       _isFileMonitoring = false;
     } catch (e) {
-      print('停止文件监控失败: $e');
+      LoggingService.instance.info('停止文件监控失败: $e');
     }
   }
 
@@ -295,7 +297,7 @@ class GameProcessManager {
     try {
       return Process.killPid(gameInfo.processId, ProcessSignal.sigkill);
     } catch (e) {
-      print('终止游戏进程失败: $e');
+      LoggingService.instance.info('终止游戏进程失败: $e');
       return false;
     }
   }
@@ -325,7 +327,7 @@ class GameProcessManager {
       // 异步处理自动备份，不阻塞进程监控
       _handleAutoBackup(gameId);
     } catch (e) {
-      print('处理游戏结束事件失败: $e');
+      LoggingService.instance.info('处理游戏结束事件失败: $e');
       // 即使统计失败，也要继续处理自动备份
       _handleAutoBackup(gameId);
     }
@@ -378,7 +380,7 @@ class GameProcessManager {
         }
       }
     } catch (e) {
-      print('处理自动备份失败: $e');
+      LoggingService.instance.info('处理自动备份失败: $e');
       if (_autoBackupCallback != null) {
         _autoBackupCallback!('自动备份失败: $e', false);
       }
@@ -392,6 +394,8 @@ class GameProcessManager {
     DateTime endTime,
   ) async {
     try {
+      LoggingService.instance.info('记录游戏会话 $gameId $startTime $endTime');
+
       final sessionDuration = endTime.difference(startTime);
 
       // 如果游戏时长少于30秒，可能是启动失败或误操作，不记录
@@ -412,7 +416,7 @@ class GameProcessManager {
         await AppDataService.saveGames(games);
       }
     } catch (e) {
-      print('记录游戏会话失败: $e');
+      LoggingService.instance.info('记录游戏会话失败: $e');
     }
   }
 

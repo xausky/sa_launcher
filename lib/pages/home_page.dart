@@ -8,6 +8,7 @@ import '../providers/game_process_provider.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_backup_service.dart';
+import '../services/logging_service.dart';
 import 'add_game_page.dart';
 import 'game_detail_page.dart';
 import 'settings_page.dart';
@@ -54,7 +55,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         _showCloudUpdateDialog();
       }
     } catch (e) {
-      print('检查云端更新失败: $e');
+      LoggingService.instance.info('检查云端更新失败: $e');
     }
   }
 

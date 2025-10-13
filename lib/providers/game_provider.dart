@@ -1,8 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sa_launcher/services/auto_backup_service.dart';
+import 'package:sa_launcher/services/restic_service.dart';
+import 'package:sa_launcher/services/save_backup_service.dart';
 import '../models/game.dart';
 import '../services/game_storage.dart';
 import '../services/cloud_backup_service.dart';
+import '../services/logging_service.dart';
 
 // 游戏列表状态管理
 class GameListNotifier extends AsyncNotifier<List<Game>> {
@@ -29,21 +32,25 @@ class GameListNotifier extends AsyncNotifier<List<Game>> {
       await loadGames(); // 重新加载列表
 
       // 触发自动上传到云端
-      CloudBackupService.autoUploadToCloud();
+      backupMainAndUpload();
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }
   }
 
+  Future<void> backupMainAndUpload() async {
+    await AutoBackupService.checkAndCreateAutoBackup(Game(id: 'main', title: '启动器数据', executablePath: '', createdAt: DateTime.now(), saveDataPath: (await ResticService.getMainDataDirectory()).path));
+  }
+
   // 更新游戏
   Future<void> updateGame(Game updatedGame) async {
     try {
-      debugPrint('updateGame: ${updatedGame.toJson()}');
+      LoggingService.instance.info('updateGame: ${updatedGame.toJson()}');
       await GameStorage.updateGame(updatedGame);
       await loadGames(); // 重新加载列表
 
       // 触发自动上传到云端
-      CloudBackupService.autoUploadToCloud();
+      backupMainAndUpload();
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }
@@ -67,7 +74,7 @@ class GameListNotifier extends AsyncNotifier<List<Game>> {
       await loadGames(); // 重新加载列表
 
       // 触发自动上传到云端
-      CloudBackupService.autoUploadToCloud();
+      backupMainAndUpload();
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }

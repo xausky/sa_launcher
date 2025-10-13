@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as path;
+import 'package:sa_launcher/services/restic_service.dart';
 import 'app_data_service.dart';
+import 'logging_service.dart';
 
 class CloudSyncConfig {
   final String endPoint;
@@ -102,7 +104,7 @@ class CloudSyncConfigService {
         objectPath: objectPath,
       );
     } catch (e) {
-      print('解析 S3 URL 失败: $e');
+      LoggingService.instance.info('解析 S3 URL 失败: $e');
       return null;
     }
   }
@@ -116,7 +118,7 @@ class CloudSyncConfigService {
         return jsonDecode(jsonString) as Map<String, dynamic>;
       }
     } catch (e) {
-      print('读取 local.json 失败: $e');
+      LoggingService.instance.info('读取 local.json 失败: $e');
     }
     return <String, dynamic>{};
   }
@@ -128,7 +130,7 @@ class CloudSyncConfigService {
       final jsonString = const JsonEncoder.withIndent('  ').convert(config);
       await localJsonFile.writeAsString(jsonString);
     } catch (e) {
-      print('写入 local.json 失败: $e');
+      LoggingService.instance.info('写入 local.json 失败: $e');
     }
   }
 
@@ -142,7 +144,7 @@ class CloudSyncConfigService {
         return CloudSyncConfig.fromJson(cloudSyncData);
       }
     } catch (e) {
-      print('获取云同步配置失败: $e');
+      LoggingService.instance.info('获取云同步配置失败: $e');
     }
     return null;
   }
@@ -160,7 +162,7 @@ class CloudSyncConfigService {
 
       await _writeLocalConfig(localConfig);
     } catch (e) {
-      print('保存云同步配置失败: $e');
+      LoggingService.instance.info('保存云同步配置失败: $e');
     }
   }
 
@@ -169,6 +171,7 @@ class CloudSyncConfigService {
     final config = parseS3Url(s3Url);
     if (config != null) {
       await saveCloudSyncConfig(config);
+      await ResticService.initRemoteRepository(cloudConfig: config);
       return true;
     }
     return false;
@@ -191,7 +194,7 @@ class CloudSyncConfigService {
       final localConfig = await _readLocalConfig();
       return localConfig['autoSync'] as bool? ?? false;
     } catch (e) {
-      print('获取自动同步配置失败: $e');
+      LoggingService.instance.info('获取自动同步配置失败: $e');
       return false;
     }
   }
@@ -203,7 +206,7 @@ class CloudSyncConfigService {
       localConfig['autoSync'] = enabled;
       await _writeLocalConfig(localConfig);
     } catch (e) {
-      print('设置自动同步配置失败: $e');
+      LoggingService.instance.info('设置自动同步配置失败: $e');
     }
   }
 
@@ -222,7 +225,7 @@ class CloudSyncConfigService {
         return result;
       }
     } catch (e) {
-      print('获取游戏路径失败: $e');
+      LoggingService.instance.info('获取游戏路径失败: $e');
     }
     return <String, Map<String, String>>{};
   }
@@ -236,7 +239,7 @@ class CloudSyncConfigService {
       localConfig['gamePaths'] = gamePaths;
       await _writeLocalConfig(localConfig);
     } catch (e) {
-      print('设置游戏路径失败: $e');
+      LoggingService.instance.info('设置游戏路径失败: $e');
     }
   }
 
@@ -255,7 +258,7 @@ class CloudSyncConfigService {
       gamePaths[gameId] = gamePathData;
       await setGamePaths(gamePaths);
     } catch (e) {
-      print('保存游戏路径失败: $e');
+      LoggingService.instance.info('保存游戏路径失败: $e');
     }
   }
 
@@ -266,7 +269,7 @@ class CloudSyncConfigService {
       gamePaths.remove(gameId);
       await setGamePaths(gamePaths);
     } catch (e) {
-      print('删除游戏路径失败: $e');
+      LoggingService.instance.info('删除游戏路径失败: $e');
     }
   }
 }

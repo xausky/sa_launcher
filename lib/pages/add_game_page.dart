@@ -250,6 +250,9 @@ class _AddGamePageState extends State<AddGamePage> {
             ? null
             : _saveDataPathController.text.trim(),
         createdAt: widget.gameToEdit?.createdAt ?? DateTime.now(),
+        playCount: widget.gameToEdit?.playCount ?? 0,
+        totalPlaytime: widget.gameToEdit?.totalPlaytime ?? Duration.zero,
+        lastPlayedAt: widget.gameToEdit?.lastPlayedAt
       );
 
       // 使用Riverpod来管理状态

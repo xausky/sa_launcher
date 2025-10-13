@@ -4,6 +4,7 @@ import '../services/app_data_service.dart';
 import '../services/cloud_sync_config_service.dart';
 import '../services/cloud_backup_service.dart';
 import '../providers/game_provider.dart';
+import '../services/logging_service.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -59,7 +60,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _updateSyncStatus();
       }
     } catch (e) {
-      print('加载设置失败: $e');
+      LoggingService.instance.info('加载设置失败: $e');
       setState(() {
         _isLoading = false;
       });
@@ -130,7 +131,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _syncStatus = status;
       });
     } catch (e) {
-      print('获取同步状态失败: $e');
+      LoggingService.instance.info('获取同步状态失败: $e');
     }
   }
 

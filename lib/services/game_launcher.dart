@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:path/path.dart' as path;
 
+import 'logging_service.dart';
+
 class GameLauncher {
   static Future<bool> launchGame(String executablePath) async {
     try {
@@ -32,7 +34,7 @@ class GameLauncher {
 
       return true;
     } catch (e) {
-      print('启动游戏失败: $e');
+      LoggingService.instance.info('启动游戏失败: $e');
       return false;
     }
   }

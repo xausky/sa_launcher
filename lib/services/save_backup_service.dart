@@ -1,10 +1,10 @@
 import 'dart:io';
-import 'package:archive/archive.dart';
-import 'package:flutter/material.dart';
-import 'package:path/path.dart' as path;
 import '../models/save_backup.dart';
 import 'app_data_service.dart';
 import 'cloud_backup_service.dart';
+import 'logging_service.dart';
+import 'restic_service.dart';
+import 'cloud_sync_config_service.dart';
 
 class SaveBackupService {
   // 创建存档备份
@@ -18,78 +18,41 @@ class SaveBackupService {
       if (!await saveDir.exists()) {
         throw Exception('存档路径不存在: $saveDataPath');
       }
+      // 创建标签
+      final tags = <String>[
+        'game:$gameId',
+        'name:$backupName',
+      ];
 
-      // 获取游戏信息以确定游戏标题
-      final games = await AppDataService.getAllGames();
-      final game = games.firstWhere((g) => g.id == gameId);
-
-      // 获取游戏的备份目录
-      final gameBackupDir = await AppDataService.getGameBackupDirectory(
-        game.title,
+      // 创建本地备份
+      final snapshot = await ResticService.createBackup(
+        backupPath: saveDataPath,
+        tags: tags,
       );
+
+      if (snapshot == null) {
+        throw Exception('创建本地备份失败');
+      }
 
       final createdAt = DateTime.now();
-      final backupId = createdAt.millisecondsSinceEpoch.toString();
 
-      // 使用新的文件名格式，包含创建时间
-      final backupFileName = AppDataService.generateBackupFileName(
-        backupName,
-        createdAt,
+      final backup = SaveBackup(
+        id: snapshot.snapshotId,
+        gameId: gameId,
+        name: backupName,
+        createdAt: createdAt,
+        fileSize: snapshot.totalBytesProcessed
       );
-      final backupFilePath = path.join(gameBackupDir.path, backupFileName);
 
-      // 创建ZIP压缩包
-      final archive = Archive();
-      await _addDirectoryToArchive(archive, saveDir, '');
+      LoggingService.instance.info('创建备份成功: 本地快照ID=${snapshot.snapshotId}');
 
-      final bytes = ZipEncoder().encode(archive);
-      if (bytes.isNotEmpty) {
-        final backupFile = File(backupFilePath);
-        await backupFile.writeAsBytes(bytes);
+      // 触发自动上传到云端（对于其他数据）
+      CloudBackupService.autoUploadToCloud();
 
-        final backup = SaveBackup(
-          id: backupId,
-          gameId: gameId,
-          name: backupName,
-          filePath: backupFilePath,
-          createdAt: createdAt,
-          fileSize: bytes.length,
-        );
-
-        debugPrint('创建备份: $backupFilePath');
-
-        // 触发自动上传到云端
-        CloudBackupService.autoUploadToCloud();
-
-        return backup;
-      }
-
-      return null;
+      return backup;
     } catch (e) {
-      print('创建备份失败: $e');
+      LoggingService.instance.info('创建备份失败: $e');
       return null;
-    }
-  }
-
-  // 递归添加目录到压缩包
-  static Future<void> _addDirectoryToArchive(
-    Archive archive,
-    Directory dir,
-    String relativePath,
-  ) async {
-    await for (final entity in dir.list()) {
-      final entityPath = path.relative(entity.path, from: dir.path);
-      final archivePath = relativePath.isEmpty
-          ? entityPath
-          : path.join(relativePath, entityPath);
-
-      if (entity is File) {
-        final bytes = await entity.readAsBytes();
-        final file = ArchiveFile(archivePath, bytes.length, bytes);
-        archive.addFile(file);
-      } else if (entity is Directory) {
-        await _addDirectoryToArchive(archive, entity, archivePath);
-      }
     }
   }
 
@@ -99,11 +62,6 @@ class SaveBackupService {
     String saveDataPath,
   ) async {
     try {
-      final backupFile = File(backup.filePath);
-      if (!await backupFile.exists()) {
-        throw Exception('备份文件不存在: ${backup.filePath}');
-      }
-
       final saveDir = Directory(saveDataPath);
 
       // 清空目标目录
@@ -112,44 +70,89 @@ class SaveBackupService {
       }
       await saveDir.create(recursive: true);
 
-      // 解压备份文件
-      final bytes = await backupFile.readAsBytes();
-      final archive = ZipDecoder().decodeBytes(bytes);
+      // 恢复备份
+      final success = await ResticService.restoreBackup(
+        snapshotId: backup.id,
+        targetPath: saveDataPath,
+      );
 
-      for (final file in archive) {
-        final filename = file.name;
-        final filePath = path.join(saveDataPath, filename);
-
-        if (file.isFile) {
-          final outFile = File(filePath);
-          final outDir = Directory(path.dirname(filePath));
-          if (!await outDir.exists()) {
-            await outDir.create(recursive: true);
-          }
-          await outFile.writeAsBytes(file.content as List<int>);
-        } else {
-          final outDir = Directory(filePath);
-          if (!await outDir.exists()) {
-            await outDir.create(recursive: true);
-          }
-        }
+      if (success) {
+        LoggingService.instance.info('应用备份成功: 快照ID=${backup.id}');
       }
 
-      return true;
+      return success;
     } catch (e) {
-      print('应用备份失败: $e');
+      LoggingService.instance.info('应用备份失败: $e');
       return false;
     }
   }
 
   // 获取游戏的所有备份
-  static Future<List<SaveBackup>> getGameBackups(String gameId) async {
-    return await AppDataService.getGameBackups(gameId);
+  static Future<List<SaveBackup>> getGameBackups(String gameId, {useRemote = false}) async {
+    try {
+      final cloudConfig = await CloudSyncConfigService.getCloudSyncConfig();
+
+      final backups = <SaveBackup>[];
+
+      // 获取本地快照
+      final snapshots = await ResticService.listSnapshots(
+        useRemote: useRemote,
+        tag: 'game:$gameId',
+        cloudConfig: cloudConfig
+      );
+
+      // 转换为 SaveBackup 对象
+      for (final snapshot in snapshots) {
+        try {
+          // 从标签中提取备份名称
+          final tags = snapshot.tags;
+          String backupName = 'unknown';
+          for (final tag in tags) {
+            if (tag.startsWith('name:')) {
+              backupName = tag.substring(5);
+              break;
+            }
+          }
+
+          final backup = SaveBackup(
+            id: snapshot.id,
+            gameId: gameId,
+            name: backupName,
+            createdAt: snapshot.time,
+            fileSize: snapshot.summary.totalBytesProcessed,
+          );
+
+          backups.add(backup);
+        } catch (e) {
+          LoggingService.instance.info('解析快照失败: $e');
+        }
+      }
+
+      // 按创建时间倒序排列
+      backups.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return backups;
+    } catch (e) {
+      LoggingService.instance.info('获取游戏备份失败: $e');
+      return [];
+    }
   }
 
   // 获取所有备份
   static Future<List<SaveBackup>> getAllBackups() async {
-    return await AppDataService.getAllBackups();
+    try {
+      final games = await AppDataService.getAllGames();
+      final allBackups = <SaveBackup>[];
+      
+      for (final game in games) {
+        final gameBackups = await getGameBackups(game.id);
+        allBackups.addAll(gameBackups);
+      }
+      
+      return allBackups;
+    } catch (e) {
+      LoggingService.instance.info('获取所有备份失败: $e');
+      return [];
+    }
   }
 
   // 删除备份
@@ -158,21 +161,34 @@ class SaveBackupService {
     bool autoUpload = true,
   }) async {
     try {
-      // 删除备份文件
-      final backupFile = File(backup.filePath);
-      if (await backupFile.exists()) {
-        await backupFile.delete();
+      final cloudConfig = await CloudSyncConfigService.getCloudSyncConfig();
+      bool useRemote = cloudConfig != null;
+
+      // 删除本地快照
+      bool success = await ResticService.deleteSnapshot(
+        snapshotId: backup.id,
+        useRemote: false,
+      );
+
+      // 如果配置了远程同步且有远程快照，也删除远程快照
+      if (useRemote) {
+        await deleteRemoteBackup(cloudConfig, backup);
       }
 
-      // 触发自动上传到云端
-      if (autoUpload) {
-        CloudBackupService.autoUploadToCloud();
-      }
-
-      return true;
+      return success;
     } catch (e) {
-      print('删除备份失败: $e');
+      LoggingService.instance.info('删除备份失败: $e');
       return false;
     }
+  }
+
+  static Future<void> deleteRemoteBackup(CloudSyncConfig cloudConfig, SaveBackup backup) async {
+    final remoteSnapshots = await ResticService.listSnapshots(useRemote: true, cloudConfig: cloudConfig, tag: 'game:${backup.gameId}');
+    final ids = remoteSnapshots.where((e) => e.time == backup.createdAt).map((e) => e.id).toList();
+    await ResticService.deleteSnapshots(
+      ids: ids,
+      useRemote: true,
+      cloudConfig: cloudConfig,
+    );
   }
 }

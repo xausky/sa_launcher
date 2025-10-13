@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sa_launcher/services/logging_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'pages/home_page.dart';
 import 'services/app_data_service.dart';
+import 'services/init_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +25,12 @@ void main() async {
       await windowManager.focus();
     });
   }
-  print('AppDataDirectory ${await AppDataService.getAppDataDirectory()}');
+  await LoggingService.instance.initialize();
+  LoggingService.instance.info('AppDataDirectory ${await AppDataService.getAppDataDirectory()}');
+
+  // 初始化应用
+  await InitService.initializeApp();
+  
   runApp(const ProviderScope(child: GameLauncherApp()));
 }
 

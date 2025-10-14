@@ -1,19 +1,18 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:sa_launcher/controllers/backup_controller.dart';
-import 'package:sa_launcher/views/dialogs.dart';
-import '../models/game_process.dart';
-import '../models/game.dart';
-import '../models/save_backup.dart';
-import '../models/file_modification.dart';
-import '../services/save_backup_service.dart';
-import '../services/auto_backup_service.dart';
-import '../services/app_data_service.dart';
-import '../controllers/game_process_controller.dart';
-import '../controllers/game_controller.dart';
-import 'add_game_page.dart';
+import 'package:sa_launcher/models/game_process.dart';
+import 'package:sa_launcher/services/app_data_service.dart';
+import 'package:sa_launcher/views/dialogs/dialogs.dart';
+import 'package:sa_launcher/models/game.dart';
+import 'package:sa_launcher/models/save_backup.dart';
+import 'package:sa_launcher/services/save_backup_service.dart';
+import 'package:sa_launcher/services/auto_backup_service.dart';
+import 'package:sa_launcher/controllers/game_process_controller.dart';
+import 'package:sa_launcher/controllers/game_controller.dart';
 
 class GameDetailPage extends StatefulWidget {
   final Game game;
@@ -25,8 +24,6 @@ class GameDetailPage extends StatefulWidget {
 }
 
 class _GameDetailPageState extends State<GameDetailPage> {
-  bool _isLoading = false;
-
   final GameController gameController = Get.find<GameController>();
   final GameProcessController gameProcessController = Get.find<GameProcessController>();
 
@@ -41,7 +38,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
         session,
       ) {
         if (gameId == widget.game.id && mounted) {
-          _showFileTrackingResults(session);
+          Dialogs.showFileTrackingResultsDialog(session);
         }
       });
     });
@@ -49,7 +46,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
 
   Future<void> _createBackup() async {
     if (widget.game.saveDataPath == null || widget.game.saveDataPath!.isEmpty) {
-      _showErrorDialog('请先在游戏设置中配置存档路径');
+      Dialogs.showErrorDialog('请先在游戏设置中配置存档路径');
       return;
     }
     final name = await Dialogs.showInputDialog("创建备份", "请输入备份名称");
@@ -63,7 +60,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
 
   Future<void> _applyBackup(SaveBackup backup) async {
     if (widget.game.saveDataPath == null || widget.game.saveDataPath!.isEmpty) {
-      _showErrorDialog('请先在游戏设置中配置存档路径');
+      Dialogs.showErrorDialog('请先在游戏设置中配置存档路径');
       return;
     }
 
@@ -73,22 +70,19 @@ class _GameDetailPageState extends State<GameDetailPage> {
     );
 
     if (confirmed) {
-      setState(() => _isLoading = true);
       try {
         final success = await SaveBackupService.applyBackup(
           backup,
           widget.game.saveDataPath!,
         );
 
-        setState(() => _isLoading = false);
         if (success) {
-          _showSuccessDialog('存档备份应用成功');
+          Dialogs.showSuccessDialog('存档备份应用成功');
         } else {
-          _showErrorDialog('存档备份应用失败');
+          Dialogs.showErrorDialog('存档备份应用失败');
         }
       } catch (e) {
-        setState(() => _isLoading = false);
-        _showErrorDialog('存档备份应用失败: $e');
+        Dialogs.showErrorDialog('存档备份应用失败: $e');
       }
     }
   }
@@ -106,49 +100,10 @@ class _GameDetailPageState extends State<GameDetailPage> {
     }
   }
 
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('错误'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  void _showSuccessDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('成功'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _editGame() async {
-    await showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: SizedBox(
-          width: 500,
-          height: 600,
-          child: AddGamePage(gameToEdit: widget.game),
-        ),
-      ),
-    );
+    await Dialogs.showEditGameDialog(widget.game);
   }
 
   Future<void> _launchGame() async {
@@ -156,15 +111,15 @@ class _GameDetailPageState extends State<GameDetailPage> {
       final success = await gameProcessController
           .launchGame(widget.game.id, widget.game.executablePath);
       if (!success) {
-        _showErrorDialog('启动游戏失败');
+        Dialogs.showErrorDialog('启动游戏失败');
       }
     } catch (e) {
-      _showErrorDialog('启动游戏失败: $e');
+      Dialogs.showErrorDialog('启动游戏失败: $e');
     }
   }
 
   Future<void> _launchGameWithFileTracking() async {
-    final confirmed = await _showFileTrackingConfirmDialog();
+    final confirmed = await Dialogs.showFileTrackingConfirmDialog();
     if (!confirmed) return;
 
     try {
@@ -174,267 +129,13 @@ class _GameDetailPageState extends State<GameDetailPage> {
             widget.game.executablePath,
           );
       if (!success) {
-        _showErrorDialog('启动游戏失败');
+        Dialogs.showErrorDialog('启动游戏失败');
       }
     } catch (e) {
-      _showErrorDialog('启动游戏失败: $e');
+      Dialogs.showErrorDialog('启动游戏失败: $e');
     }
   }
 
-  Future<bool> _showFileTrackingConfirmDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.track_changes, color: Colors.blue),
-                SizedBox(width: 8),
-                Text('启动游戏并追踪文件修改'),
-              ],
-            ),
-            content: const Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('此功能将：', style: TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(height: 8),
-                Text('1. 启动游戏并且追踪游戏对计算机文件的修改。'),
-                SizedBox(height: 4),
-                Text('2. 在游戏运行结束后显示所有修改的文件列表和修改次数。'),
-                SizedBox(height: 4),
-                Text('3. 用于对于不知道存档目录的游戏追踪存档目录使用。'),
-                SizedBox(height: 12),
-                Text(
-                  '注意：',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.orange,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  '使用本方法运行游戏会对游戏性能以及系统性能产生一定负面影响。',
-                  style: TextStyle(color: Colors.orange),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                child: const Text('确定启动'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  void _showFileTrackingResults(FileTrackingSession session) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: SizedBox(
-          width: 800,
-          height: 600,
-          child: Column(
-            children: [
-              // 标题栏
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.track_changes, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    const Text(
-                      '文件修改追踪结果',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 统计信息
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        icon: Icons.folder,
-                        title: '修改文件数',
-                        value: '${session.modifiedFileCount}个',
-                        color: Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildStatCard(
-                        icon: Icons.edit,
-                        title: '总修改次数',
-                        value: '${session.totalModifications}次',
-                        color: Colors.green,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildStatCard(
-                        icon: Icons.schedule,
-                        title: '追踪时长',
-                        value: _formatDuration(session.duration),
-                        color: Colors.orange,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 文件列表
-              Expanded(
-                child: session.modifiedFileCount == 0
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 48,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              '未检测到文件修改',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              '可能游戏没有修改任何文件，或者文件修改发生在系统目录中',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: session.sortedModifications.length,
-                        itemBuilder: (context, index) {
-                          final modification =
-                              session.sortedModifications[index];
-                          return _buildFileModificationItem(modification);
-                        },
-                      ),
-              ),
-
-              // 底部按钮
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: Colors.grey[300]!)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('关闭'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFileModificationItem(FileModification modification) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Icon(
-          Icons.insert_drive_file,
-          color: modification.modificationCount > 5 ? Colors.red : Colors.blue,
-        ),
-        title: Text(
-          modification.fileName,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              modification.filePath,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '修改次数: ${modification.modificationCount} | 最后修改: ${_formatDateTime(modification.lastModified)}',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: modification.modificationCount > 5
-                    ? Colors.red[100]
-                    : Colors.blue[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${modification.modificationCount}次',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: modification.modificationCount > 5
-                      ? Colors.red[800]
-                      : Colors.blue[800],
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: () => _openDirectory(modification.directoryPath, '目录'),
-              icon: const Icon(Icons.folder_open, size: 20),
-              tooltip: '打开目录',
-              padding: const EdgeInsets.all(4),
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            ),
-          ],
-        ),
-        isThreeLine: true,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -452,9 +153,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
             ),
           ],
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -475,6 +174,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
       );
     });
   }
+
 
   Widget _buildGameInfo(GameProcessInfo? info) {
     return Card(
@@ -502,27 +202,27 @@ class _GameDetailPageState extends State<GameDetailPage> {
 
                       return coverPath != null && File(coverPath).existsSync()
                           ? ClipRRect(
-                              borderRadius: BorderRadius.circular(7),
-                              child: Image.file(
-                                File(coverPath),
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                              ),
-                            )
+                        borderRadius: BorderRadius.circular(7),
+                        child: Image.file(
+                          File(coverPath),
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      )
                           : Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                borderRadius: BorderRadius.circular(7),
-                              ),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.games,
-                                  size: 32,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            );
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.games,
+                            size: 32,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -686,7 +386,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
       // 使用 Windows 的 explorer 命令打开目录
       await Process.run('explorer', [directoryPath]);
     } catch (e) {
-      _showErrorDialog('打开目录失败: $e');
+      Dialogs.showErrorDialog('打开目录失败: $e');
     }
   }
 

@@ -6,22 +6,23 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/game.dart';
-import '../controllers/game_controller.dart';
-import '../services/game_storage.dart';
-import '../services/game_launcher.dart';
-import '../services/app_data_service.dart';
+import 'package:sa_launcher/models/game.dart';
+import 'package:sa_launcher/controllers/game_controller.dart';
+import 'package:sa_launcher/services/game_storage.dart';
+import 'package:sa_launcher/services/game_launcher.dart';
+import 'package:sa_launcher/services/app_data_service.dart';
+import 'dialogs.dart';
 
-class AddGamePage extends StatefulWidget {
+class EditGameView extends StatefulWidget {
   final Game? gameToEdit;
 
-  const AddGamePage({super.key, this.gameToEdit});
+  const EditGameView({super.key, this.gameToEdit});
 
   @override
-  State<AddGamePage> createState() => _AddGamePageState();
+  State<EditGameView> createState() => _EditGameViewState();
 }
 
-class _AddGamePageState extends State<AddGamePage> {
+class _EditGameViewState extends State<EditGameView> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _pathController = TextEditingController();
@@ -82,7 +83,7 @@ class _AddGamePageState extends State<AddGamePage> {
         }
       }
     } catch (e) {
-      _showErrorDialog('选择文件失败: $e');
+      Dialogs.showErrorDialog('选择文件失败: $e');
     }
   }
 
@@ -96,7 +97,7 @@ class _AddGamePageState extends State<AddGamePage> {
         _saveDataPathController.text = selectedDirectory;
       }
     } catch (e) {
-      _showErrorDialog('选择文件夹失败: $e');
+      Dialogs.showErrorDialog('选择文件夹失败: $e');
     }
   }
 
@@ -115,7 +116,7 @@ class _AddGamePageState extends State<AddGamePage> {
         });
       }
     } catch (e) {
-      _showErrorDialog('选择图片失败: $e');
+      Dialogs.showErrorDialog('选择图片失败: $e');
     }
   }
 
@@ -123,7 +124,7 @@ class _AddGamePageState extends State<AddGamePage> {
     try {
       final clipboard = SystemClipboard.instance;
       if (clipboard == null) {
-        _showErrorDialog('此平台不支持剪切板功能');
+        Dialogs.showErrorDialog('此平台不支持剪切板功能');
         return;
       }
 
@@ -153,14 +154,14 @@ class _AddGamePageState extends State<AddGamePage> {
               _coverImageChanged = true;
             });
           } catch (e) {
-            _showErrorDialog('处理剪切板图像失败: $e');
+            Dialogs.showErrorDialog('处理剪切板图像失败: $e');
           }
         });
       } else {
-        _showErrorDialog('剪切板中没有图像数据');
+        Dialogs.showErrorDialog('剪切板中没有图像数据');
       }
     } catch (e) {
-      _showErrorDialog('读取剪切板失败: $e');
+      Dialogs.showErrorDialog('读取剪切板失败: $e');
     }
   }
 
@@ -174,7 +175,7 @@ class _AddGamePageState extends State<AddGamePage> {
   Future<void> _searchGameOnIGDB() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      _showErrorDialog('请先输入游戏标题');
+      Dialogs.showErrorDialog('请先输入游戏标题');
       return;
     }
 
@@ -183,23 +184,11 @@ class _AddGamePageState extends State<AddGamePage> {
       if (await canLaunchUrl(Uri.parse(url))) {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } else {
-        _showErrorDialog('无法打开浏览器');
+        Dialogs.showErrorDialog('无法打开浏览器');
       }
     } catch (e) {
-      _showErrorDialog('打开链接失败: $e');
+      Dialogs.showErrorDialog('打开链接失败: $e');
     }
-  }
-
-  bool _handleKeyEvent(KeyEvent event) {
-    if (event is KeyDownEvent) {
-      // Delete 键删除封面
-      if (event.logicalKey == LogicalKeyboardKey.delete &&
-          _coverImagePath != null) {
-        _removeCoverImage();
-        return true;
-      }
-    }
-    return false;
   }
 
   Future<void> _saveGame() async {
@@ -264,10 +253,10 @@ class _AddGamePageState extends State<AddGamePage> {
       }
 
       if (mounted) {
-        Navigator.pop(context, true);
+        Get.back(result: true);
       }
     } catch (e) {
-      _showErrorDialog('保存游戏失败: $e');
+      Dialogs.showErrorDialog('保存游戏失败: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -275,81 +264,58 @@ class _AddGamePageState extends State<AddGamePage> {
     }
   }
 
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('错误'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      focusNode: _focusNode,
-      onKeyEvent: (node, event) {
-        return _handleKeyEvent(event)
-            ? KeyEventResult.handled
-            : KeyEventResult.ignored;
-      },
-      child: Dialog(
-        child: Container(
-          width: 500,
-          constraints: const BoxConstraints(maxHeight: 600),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 标题栏
-              Container(
-                padding: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.inversePrimary,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.gameToEdit != null ? '编辑游戏' : '添加游戏',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
+    return Dialog(
+      child: Container(
+        width: 500,
+        constraints: const BoxConstraints(maxHeight: 600),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 标题栏
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.inversePrimary,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
                 ),
               ),
-              // 内容区域
-              Expanded(
-                child: Form(
-                  key: _formKey,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 封面图片预览和操作按钮
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // 封面图片预览 - 放在左侧
-                              Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.gameToEdit != null ? '编辑游戏' : '添加游戏',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Get.back(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            // 内容区域
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // 封面图片预览和操作按钮
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 封面图片预览 - 放在左侧
+                            Expanded(
                                 flex: 2,
                                 child: Container(alignment: Alignment.center,child: Stack(
                                   children: [
@@ -423,122 +389,121 @@ class _AddGamePageState extends State<AddGamePage> {
                                       ),
                                   ],
                                 ),)
-                              ),
-                              const SizedBox(width: 16),
-                              // 操作按钮 - 放在右侧
-                              Expanded(
-                                flex: 1,
-                                child: SizedBox(height: 200/0.75, child: Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: _pickCoverImage,
-                                      icon: const Icon(Icons.image),
-                                      label: const Text('选择封面'),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    ElevatedButton.icon(
-                                      onPressed: _pasteImageFromClipboard,
-                                      icon: const Icon(Icons.paste),
-                                      label: const Text('粘贴封面'),
-                                    ),
-                                  ],
-                                ),),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          // 游戏标题
-                          TextFormField(
-                            controller: _titleController,
-                            decoration: InputDecoration(
-                              labelText: '游戏标题',
-                              border: const OutlineInputBorder(),
-                              suffixIcon: IconButton(
-                                onPressed: _searchGameOnIGDB,
-                                icon: const Icon(Icons.search),
-                                tooltip: '在 IGDB 上搜索',
-                              ),
                             ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return '请输入游戏标题';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-
-                          // 可执行文件路径
-                          TextFormField(
-                            controller: _pathController,
-                            decoration: InputDecoration(
-                              labelText: '可执行文件路径',
-                              border: const OutlineInputBorder(),
-                              suffixIcon: IconButton(
-                                onPressed: _pickExecutable,
-                                icon: const Icon(Icons.folder_open),
-                              ),
-                            ),
-                            readOnly: true,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return '请选择可执行文件';
-                              }
-                              if (!GameLauncher.isExecutable(value)) {
-                                return '请选择有效的可执行文件 (.exe 或 .msi)';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 16),
-
-                          // 存档路径
-                          TextFormField(
-                            controller: _saveDataPathController,
-                            decoration: InputDecoration(
-                              labelText: '存档路径 (可选)',
-                              hintText: '选择游戏存档文件夹',
-                              border: const OutlineInputBorder(),
-                              suffixIcon: IconButton(
-                                onPressed: _pickSaveDataPath,
-                                icon: const Icon(Icons.folder_open),
-                              ),
-                            ),
-                            readOnly: true,
-                          ),
-                          const SizedBox(height: 24),
-
-                          // 保存按钮
-                          ElevatedButton(
-                            onPressed: _isLoading ? null : _saveGame,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(
-                                    widget.gameToEdit != null ? '更新游戏' : '添加游戏',
-                                    style: const TextStyle(fontSize: 16),
+                            const SizedBox(width: 16),
+                            // 操作按钮 - 放在右侧
+                            Expanded(
+                              flex: 1,
+                              child: SizedBox(height: 200/0.75, child: Column(
+                                mainAxisSize: MainAxisSize.max,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  ElevatedButton.icon(
+                                    onPressed: _pickCoverImage,
+                                    icon: const Icon(Icons.image),
+                                    label: const Text('选择封面'),
                                   ),
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    onPressed: _pasteImageFromClipboard,
+                                    icon: const Icon(Icons.paste),
+                                    label: const Text('粘贴封面'),
+                                  ),
+                                ],
+                              ),),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // 游戏标题
+                        TextFormField(
+                          controller: _titleController,
+                          decoration: InputDecoration(
+                            labelText: '游戏标题',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: _searchGameOnIGDB,
+                              icon: const Icon(Icons.search),
+                              tooltip: '在 IGDB 上搜索',
+                            ),
                           ),
-                        ],
-                      ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return '请输入游戏标题';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 可执行文件路径
+                        TextFormField(
+                          controller: _pathController,
+                          decoration: InputDecoration(
+                            labelText: '可执行文件路径',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: _pickExecutable,
+                              icon: const Icon(Icons.folder_open),
+                            ),
+                          ),
+                          readOnly: true,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return '请选择可执行文件';
+                            }
+                            if (!GameLauncher.isExecutable(value)) {
+                              return '请选择有效的可执行文件 (.exe 或 .msi)';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 存档路径
+                        TextFormField(
+                          controller: _saveDataPathController,
+                          decoration: InputDecoration(
+                            labelText: '存档路径 (可选)',
+                            hintText: '选择游戏存档文件夹',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: _pickSaveDataPath,
+                              icon: const Icon(Icons.folder_open),
+                            ),
+                          ),
+                          readOnly: true,
+                        ),
+                        const SizedBox(height: 24),
+
+                        // 保存按钮
+                        ElevatedButton(
+                          onPressed: _isLoading ? null : _saveGame,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : Text(
+                            widget.gameToEdit != null ? '更新游戏' : '添加游戏',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

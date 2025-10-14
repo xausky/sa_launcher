@@ -1,0 +1,8 @@
+# 这是针对本项目的规则要好好遵循
+
+- 本项目是 flutter 项目，遵循 flutter 的最佳实践组织代码
+- 本项目使用 GetX 框架，包括状态管理，路由管理，依赖注入都要使用 GetX 的模式
+- 本项目的所有弹窗代码都放到 lib/views/dialogs/dialogs.dart 文件中，如果需要弹窗尽量引用这里面的代码
+- 如果有不满足需求的弹窗在这个文件内新建，如果是很复杂的弹窗内容拆分为 view 放到 dialogs.dart 同级目录
+- 本项目所有 SnackBar 代码都放到 lib/views/snacks/snacks.dart 文件中，规则类似弹窗
+- 你可以使用 flutter analyze --no-pub 分析错误和警告，尽量修正它

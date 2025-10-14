@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sa_launcher/views/dialogs/dialogs.dart';
+import 'package:sa_launcher/views/snacks/snacks.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_sync_config_service.dart';
 import '../services/cloud_backup_service.dart';
@@ -75,24 +77,9 @@ class _SettingsPageState extends State<SettingsPage> {
         'autoBackupCount': _autoBackupCount,
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('设置已保存'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      Snacks.success('设置已保存');
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存设置失败: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+      Snacks.error('保存设置失败: $e');
     }
   }
 
@@ -104,23 +91,10 @@ class _SettingsPageState extends State<SettingsPage> {
         _autoSyncEnabled = enabled;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(enabled ? '自动云同步已启用' : '自动云同步已关闭'),
-            duration: const Duration(seconds: 1),
-          ),
-        );
-      }
+      Snacks.success(enabled ? '自动云同步已启用' : '自动云同步已关闭',
+          duration: const Duration(seconds: 1));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存自动同步设置失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      Snacks.error('保存自动同步设置失败: $e');
     }
   }
 
@@ -156,24 +130,9 @@ class _SettingsPageState extends State<SettingsPage> {
         _isCloudConfigured = true;
       });
       _updateSyncStatus();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('云同步配置已保存'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      Snacks.success('云同步配置已保存');
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('云同步配置格式错误，请检查URL格式'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
+      Snacks.error('云同步配置格式错误，请检查URL格式');
     }
   }
 
@@ -185,28 +144,16 @@ class _SettingsPageState extends State<SettingsPage> {
 
     try {
       final connected = await CloudBackupService.testCloudConnection();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(connected ? '连接成功' : '连接失败'),
-            backgroundColor: connected ? Colors.green : Colors.red,
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      if (connected) {
+        Snacks.success('连接成功');
+      } else {
+        Snacks.error('连接失败');
       }
       if (connected) {
         _updateSyncStatus();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('测试连接失败: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+      Snacks.error('测试连接失败: $e');
     } finally {
       setState(() {
         _isTestingConnection = false;
@@ -226,9 +173,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (result == CloudSyncResult.needsConfirmation) {
         // 需要用户确认，显示对话框
-        final confirmed = await _showConfirmationDialog(
-          title: '确认上传',
-          content: '云端文件比本地文件更新，上传将覆盖云端的新版本。\n\n确定要继续上传吗？',
+        final confirmed = await Dialogs.showConfirmDialog(
+          '确认上传',
+          '云端文件比本地文件更新，上传将覆盖云端的新版本。\n\n确定要继续上传吗？',
         );
 
         if (!confirmed) {
@@ -247,15 +194,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _handleSyncResult(result, '上传');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('上传失败: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+      Snacks.error('上传失败: $e');
     } finally {
       setState(() {
         _isSyncing = false;
@@ -275,9 +214,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (result == CloudSyncResult.needsConfirmation) {
         // 需要用户确认，显示对话框
-        final confirmed = await _showConfirmationDialog(
-          title: '确认下载',
-          content: '本地文件比云端文件更新，下载将覆盖本地的新版本。\n\n确定要继续下载吗？',
+        final confirmed = await Dialogs.showConfirmDialog(
+          '确认下载',
+          '本地文件比云端文件更新，下载将覆盖本地的新版本。\n\n确定要继续下载吗？',
         );
 
         if (!confirmed) {
@@ -296,15 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
         await _handleDownloadResult(result);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('下载失败: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+      Snacks.error('下载失败: $e');
     } finally {
       setState(() {
         _isSyncing = false;
@@ -312,49 +243,14 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // 显示确认对话框
-  Future<bool> _showConfirmationDialog({
-    required String title,
-    required String content,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(content),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('确定'),
-            ),
-          ],
-        );
-      },
-    );
-    return result ?? false;
-  }
-
   // 处理同步结果
   void _handleSyncResult(CloudSyncResult result, String operation) {
     final message = CloudBackupService.getSyncResultMessage(result);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$operation结果: $message'),
-          backgroundColor:
-              result == CloudSyncResult.success ||
-                  result == CloudSyncResult.noChanges
-              ? Colors.green
-              : Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    if (result == CloudSyncResult.success || result == CloudSyncResult.noChanges) {
+      Snacks.success('$operation结果: $message');
+    } else {
+      Snacks.error('$operation结果: $message');
     }
 
     if (result == CloudSyncResult.success) {
@@ -370,15 +266,7 @@ class _SettingsPageState extends State<SettingsPage> {
       // 重新加载应用数据并刷新游戏列表
       await gameController.loadGames();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('配置已同步，游戏列表已刷新'),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      Snacks.info('配置已同步，游戏列表已刷新');
     }
   }
 

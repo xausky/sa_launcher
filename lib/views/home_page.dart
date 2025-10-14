@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sa_launcher/controllers/backup_controller.dart';
 import 'package:sa_launcher/models/game_process.dart';
+import 'package:sa_launcher/views/dialogs/dialogs.dart';
+import 'package:sa_launcher/views/snacks/snacks.dart';
 import '../models/game.dart';
 import '../controllers/game_controller.dart';
 import '../controllers/game_process_controller.dart';
@@ -10,7 +12,7 @@ import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_backup_service.dart';
 import '../services/logging_service.dart';
-import 'add_game_page.dart';
+import 'dialogs/edit_game_view.dart';
 import 'game_detail_page.dart';
 import 'settings_page.dart';
 
@@ -38,14 +40,10 @@ class _HomePageState extends State<HomePage> {
 
   // 显示自动备份消息
   void _showAutoBackupMessage(String message, bool isSuccess) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: isSuccess ? Colors.green : Colors.orange,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+    if (isSuccess) {
+      Snacks.success(message);
+    } else {
+      Snacks.warning(message);
     }
   }
 
@@ -62,29 +60,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   // 显示云端更新对话框
-  void _showCloudUpdateDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('发现云端更新'),
-          content: const Text('检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('稍后'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _downloadFromCloud();
-              },
-              child: const Text('立即下载'),
-            ),
-          ],
-        );
-      },
-    );
+  void _showCloudUpdateDialog() async {
+    final download = await Dialogs.showCloudUpdateDialog();
+    if (download) {
+      _downloadFromCloud();
+    }
   }
 
   // 从云端下载
@@ -98,32 +78,12 @@ class _HomePageState extends State<HomePage> {
         // 重新加载游戏列表
         await gameController.loadGames();
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('云端配置下载成功，游戏列表已更新'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+        Snacks.success('云端配置下载成功，游戏列表已更新');
       } else if (result != CloudSyncResult.noChanges) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '下载失败: ${CloudBackupService.getSyncResultMessage(result)}',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        Snacks.error('下载失败: ${CloudBackupService.getSyncResultMessage(result)}');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('下载失败: $e'), backgroundColor: Colors.red),
-        );
-      }
+      Snacks.error('下载失败: $e');
     }
   }
 
@@ -251,10 +211,9 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (checkResult.shouldSyncCloud) {
-        final shouldApply = await _showSyncCloudDialog(
-          context,
-          game,
-          checkResult,
+        final shouldApply = await Dialogs.showConfirmDialog(
+          '发现云端更新',
+          '检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？',
         );
         if (shouldApply == true) {
           await CloudBackupService.downloadFromCloud(skipConfirmation: true);
@@ -265,18 +224,18 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (checkResult.shouldApply) {
-        final shouldApply = await _showAutoBackupDialog(
-          context,
+        final shouldApply = await Dialogs.showAutoBackupDialog(
           game,
           checkResult,
         );
         if (shouldApply == true) {
           // 显示应用备份的进度对话框
-          final applySuccess = await _showApplyBackupProgress(context, game);
-          if (!applySuccess) {
-            _showErrorDialog(context, '应用自动备份失败');
-            return;
-          }
+          await Dialogs.showProgressDialog('正在应用自动备份', () async {
+            final applySuccess = await AutoBackupService.applyAutoBackup(game);
+            if (!applySuccess) {
+              Dialogs.showErrorDialog('应用自动备份失败');
+            }
+          });
         }
       }
 
@@ -284,42 +243,15 @@ class _HomePageState extends State<HomePage> {
       final gameProcessController = Get.find<GameProcessController>();
       final success = await gameProcessController.launchGame(game.id, game.executablePath);
       if (!success) {
-        _showErrorDialog(context, '启动游戏失败');
+        Dialogs.showErrorDialog('启动游戏失败');
       }
     } catch (e) {
-      _showErrorDialog(context, '启动游戏失败: $e');
+      Dialogs.showErrorDialog('启动游戏失败: $e');
     }
   }
 
-  Future<bool?> _showSyncCloudDialog(
-    context,
-    Game game,
-    BackupCheckResult checkResult,
-  ) async {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('发现云端更新'),
-        content: const Text('检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('不需要同步'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('下载最新版本'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _addGame(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => const AddGamePage(),
-    );
+    final result = await Dialogs.showAddGameDialog();
 
     if (result == true) {
       gameController.refresh();
@@ -327,10 +259,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _editGame(BuildContext context, Game game) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AddGamePage(gameToEdit: game),
-    );
+    final result = await Dialogs.showEditGameDialog(game);
 
     if (result == true) {
       gameController.refresh();
@@ -338,22 +267,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _deleteGame(BuildContext context, Game game) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认删除'),
-        content: Text('确定要删除游戏 "${game.title}" 吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirm = await Dialogs.showConfirmDialog(
+      '确认删除',
+      '确定要删除游戏 "${game.title}" 吗？',
     );
 
     if (confirm == true) {
@@ -371,191 +287,8 @@ class _HomePageState extends State<HomePage> {
     Get.to(() => const SettingsPage());
   }
 
-  // 显示自动备份应用提示对话框
-  Future<bool?> _showAutoBackupDialog(
-    BuildContext context,
-    Game game,
-    BackupCheckResult checkResult,
-  ) async {
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.auto_awesome, color: Colors.green[600]),
-            const SizedBox(width: 12),
-            const Text('发现更新的自动备份'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '游戏 "${game.title}" 存在更新的自动备份存档。',
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 16),
 
-            // 时间信息卡片
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.auto_awesome,
-                        color: Colors.green[600],
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      const Text(
-                        '自动备份时间:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDateTime(checkResult.autoBackupTime!),
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.folder, color: Colors.blue[600], size: 16),
-                      const SizedBox(width: 6),
-                      const Text(
-                        '存档目录时间:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    checkResult.saveDataTime != null
-                        ? _formatDateTime(checkResult.saveDataTime!)
-                        : '不存在或为空',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: checkResult.saveDataTime != null
-                          ? null
-                          : Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
 
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning, color: Colors.orange[600], size: 20),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      '应用备份将覆盖当前存档文件！',
-                      style: TextStyle(fontSize: 14),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text('是否要应用自动备份后再启动游戏？', style: TextStyle(fontSize: 14)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('跳过'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('应用备份'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 显示应用备份进度对话框
-  Future<bool> _showApplyBackupProgress(BuildContext context, Game game) async {
-    bool success = false;
-
-    // 显示进度对话框
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('正在应用自动备份'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text('正在应用游戏 "${game.title}" 的自动备份...'),
-          ],
-        ),
-      ),
-    );
-
-    try {
-      // 异步执行备份应用
-      success = await AutoBackupService.applyAutoBackup(game);
-    } catch (e) {
-      success = false;
-    } finally {
-      // 关闭进度对话框
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-    }
-
-    return success;
-  }
-
-  void _showErrorDialog(BuildContext context, String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('错误'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} '
-        '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-  }
 }
 
 class GameCard extends StatelessWidget {

@@ -1,22 +1,21 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/game.dart';
-import '../providers/game_provider.dart';
+import '../controllers/game_controller.dart';
 import '../services/game_storage.dart';
 import '../services/game_launcher.dart';
 import '../services/app_data_service.dart';
 
 class AddGamePage extends StatefulWidget {
   final Game? gameToEdit;
-  final WidgetRef ref;
 
-  const AddGamePage({super.key, this.gameToEdit, required this.ref});
+  const AddGamePage({super.key, this.gameToEdit});
 
   @override
   State<AddGamePage> createState() => _AddGamePageState();
@@ -28,6 +27,8 @@ class _AddGamePageState extends State<AddGamePage> {
   final _pathController = TextEditingController();
   final _saveDataPathController = TextEditingController();
   final _focusNode = FocusNode();
+
+  final GameController gameController = Get.find<GameController>();
 
   String? _coverImagePath;
   bool _isLoading = false;
@@ -255,11 +256,11 @@ class _AddGamePageState extends State<AddGamePage> {
         lastPlayedAt: widget.gameToEdit?.lastPlayedAt
       );
 
-      // 使用Riverpod来管理状态
+      // 使用GetX来管理状态
       if (widget.gameToEdit != null) {
-        await widget.ref.read(gameListProvider.notifier).updateGame(game);
+        await gameController.updateGame(game);
       } else {
-        await widget.ref.read(gameListProvider.notifier).addGame(game);
+        await gameController.addGame(game);
       }
 
       if (mounted) {

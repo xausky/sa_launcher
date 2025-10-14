@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:sa_launcher/controllers/backup_controller.dart';
+import 'package:sa_launcher/views/dialogs.dart';
 import '../models/game_process.dart';
 import '../models/game.dart';
 import '../models/save_backup.dart';
@@ -9,31 +11,32 @@ import '../models/file_modification.dart';
 import '../services/save_backup_service.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
-import '../providers/game_process_provider.dart';
-import '../providers/game_provider.dart';
+import '../controllers/game_process_controller.dart';
+import '../controllers/game_controller.dart';
 import 'add_game_page.dart';
 
-class GameDetailPage extends ConsumerStatefulWidget {
+class GameDetailPage extends StatefulWidget {
   final Game game;
 
   const GameDetailPage({super.key, required this.game});
 
   @override
-  ConsumerState<GameDetailPage> createState() => _GameDetailPageState();
+  State<GameDetailPage> createState() => _GameDetailPageState();
 }
 
-class _GameDetailPageState extends ConsumerState<GameDetailPage> {
-  List<SaveBackup> _backups = [];
+class _GameDetailPageState extends State<GameDetailPage> {
   bool _isLoading = false;
+
+  final GameController gameController = Get.find<GameController>();
+  final GameProcessController gameProcessController = Get.find<GameProcessController>();
 
   @override
   void initState() {
     super.initState();
-    _loadBackups();
 
     // 设置文件追踪回调
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(gameProcessProvider.notifier).setFileTrackingCallback((
+      gameProcessController.setFileTrackingCallback((
         gameId,
         session,
       ) {
@@ -44,94 +47,19 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
     });
   }
 
-  Future<void> _loadBackups() async {
-    setState(() => _isLoading = true);
-    try {
-      final backups = await SaveBackupService.getGameBackups(widget.game.id);
-      // 使用自动备份服务的排序方法，自动备份置顶
-      final sortedBackups = AutoBackupService.sortBackupsWithAutoFirst(backups);
-      setState(() {
-        _backups = sortedBackups;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showErrorDialog('加载备份列表失败: $e');
-    }
-  }
-
   Future<void> _createBackup() async {
     if (widget.game.saveDataPath == null || widget.game.saveDataPath!.isEmpty) {
       _showErrorDialog('请先在游戏设置中配置存档路径');
       return;
     }
-
-    final result = await _showCreateBackupDialog();
-    if (result != null && result.isNotEmpty) {
-      setState(() => _isLoading = true);
-      try {
-        final backup = await SaveBackupService.createBackup(
-          widget.game.id,
-          widget.game.saveDataPath!,
-          result,
-        );
-
-        if (backup != null) {
-          await _loadBackups();
-          _showSuccessDialog('备份创建成功');
-        } else {
-          _showErrorDialog('备份创建失败');
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        _showErrorDialog('备份创建失败: $e');
-      }
+    final name = await Dialogs.showInputDialog("创建备份", "请输入备份名称");
+    if (name != null && name.isNotEmpty) {
+      Dialogs.showProgressDialog("正在创建备份", () async {
+        await Get.find<BackupController>().newBackup(name);
+      });
     }
   }
 
-  Future<String?> _showCreateBackupDialog() async {
-    final controller = TextEditingController();
-    final now = DateTime.now();
-    controller.text =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('创建存档备份'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('请输入备份名称:'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                hintText: '备份名称',
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final name = controller.text.trim();
-              if (name.isNotEmpty) {
-                Navigator.of(context).pop(name);
-              }
-            },
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _applyBackup(SaveBackup backup) async {
     if (widget.game.saveDataPath == null || widget.game.saveDataPath!.isEmpty) {
@@ -139,7 +67,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
       return;
     }
 
-    final confirmed = await _showConfirmDialog(
+    final confirmed = await Dialogs.showConfirmDialog(
       '应用存档备份',
       '确定要应用备份 "${backup.name}" 吗？\n\n这将覆盖当前的存档文件！',
     );
@@ -166,49 +94,16 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
   }
 
   Future<void> _deleteBackup(SaveBackup backup) async {
-    final confirmed = await _showConfirmDialog(
+    final confirmed = await Dialogs.showConfirmDialog(
       '删除备份',
       '确定要删除备份 "${backup.name}" 吗？\n\n此操作无法撤销！',
     );
 
     if (confirmed) {
-      setState(() => _isLoading = true);
-      try {
-        final success = await SaveBackupService.deleteBackup(backup);
-        if (success) {
-          await _loadBackups();
-          _showSuccessDialog('备份删除成功');
-        } else {
-          setState(() => _isLoading = false);
-          _showErrorDialog('备份删除失败');
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        _showErrorDialog('备份删除失败: $e');
-      }
+      Dialogs.showProgressDialog("正在删除备份", () async {
+        await Get.find<BackupController>().deleteBackup(backup);
+      });
     }
-  }
-
-  Future<bool> _showConfirmDialog(String title, String content) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(title),
-            content: Text(content),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('确定'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
   }
 
   void _showErrorDialog(String message) {
@@ -250,7 +145,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
         child: SizedBox(
           width: 500,
           height: 600,
-          child: AddGamePage(gameToEdit: widget.game, ref: ref),
+          child: AddGamePage(gameToEdit: widget.game),
         ),
       ),
     );
@@ -258,8 +153,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
 
   Future<void> _launchGame() async {
     try {
-      final success = await ref
-          .read(gameProcessProvider.notifier)
+      final success = await gameProcessController
           .launchGame(widget.game.id, widget.game.executablePath);
       if (!success) {
         _showErrorDialog('启动游戏失败');
@@ -274,8 +168,7 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
     if (!confirmed) return;
 
     try {
-      final success = await ref
-          .read(gameProcessProvider.notifier)
+      final success = await gameProcessController
           .launchGameWithFileTracking(
             widget.game.id,
             widget.game.executablePath,
@@ -545,41 +438,42 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final info = ref.watch(gameProcessInfoProvider(widget.game.id));
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.game.title),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          IconButton(
-            onPressed: _editGame,
-            icon: const Icon(Icons.edit),
-            tooltip: '编辑游戏',
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 游戏基本信息
-                  _buildGameInfo(info),
-                  const SizedBox(height: 24),
-
-                  // 游戏统计信息
-                  _buildStatsSection(),
-                  const SizedBox(height: 24),
-
-                  // 存档备份管理
-                  _buildBackupSection(),
-                ],
-              ),
+    return Obx(() {
+      final info = gameProcessController.runningGames[widget.game.id];
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(widget.game.title),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          actions: [
+            IconButton(
+              onPressed: _editGame,
+              icon: const Icon(Icons.edit),
+              tooltip: '编辑游戏',
             ),
-    );
+          ],
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 游戏基本信息
+              _buildGameInfo(info),
+              const SizedBox(height: 24),
+
+              // 游戏统计信息
+              _buildStatsSection(),
+              const SizedBox(height: 24),
+
+              // 存档备份管理
+              _buildBackupSection(),
+            ],
+          ),
+        ),
+      );
+    });
   }
 
   Widget _buildGameInfo(GameProcessInfo? info) {
@@ -664,40 +558,43 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
             Wrap(
               spacing: 12,
               runSpacing: 8,
-              children: [
-                if (!(info?.isRunning ?? false)) ...[
-                  ElevatedButton.icon(
-                    onPressed: _launchGame,
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('启动游戏'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                    ),
+              children: (!(info?.isRunning ?? false)) ? [
+                ElevatedButton.icon(
+                  onPressed: _launchGame,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('启动游戏'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
                   ),
-                  ElevatedButton.icon(
-                    onPressed: _launchGameWithFileTracking,
-                    icon: const Icon(Icons.track_changes),
-                    label: const Text('启动游戏（并且追踪文件修改）'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                    ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: _launchGameWithFileTracking,
+                  icon: const Icon(Icons.track_changes),
+                  label: const Text('启动游戏（并且追踪文件修改）'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
                   ),
-                ] else
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      await ref
-                          .read(gameProcessProvider.notifier)
-                          .killGame(widget.game.id);
-                    },
-                    icon: const Icon(Icons.stop),
-                    label: const Text('停止游戏'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                    ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _editGame,
+                  icon: const Icon(Icons.edit),
+                  label: const Text('编辑'),
+                ),
+              ] : [
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await gameProcessController
+                        .killGame(widget.game.id);
+                  },
+                  icon: const Icon(Icons.stop),
+                  label: const Text('停止游戏'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
                   ),
+                ),
                 OutlinedButton.icon(
                   onPressed: _editGame,
                   icon: const Icon(Icons.edit),
@@ -794,91 +691,94 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
   }
 
   Widget _buildBackupSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '存档备份',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                ElevatedButton.icon(
-                  onPressed:
-                      widget.game.saveDataPath != null &&
-                          widget.game.saveDataPath!.isNotEmpty
-                      ? _createBackup
-                      : null,
-                  icon: const Icon(Icons.add),
-                  label: const Text('新建备份'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+    return Obx(() {
+      final backups = AutoBackupService.sortBackupsWithAutoFirst(Get.find<BackupController>().backupMap.values.toList());
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '存档备份',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed:
+                    widget.game.saveDataPath != null &&
+                        widget.game.saveDataPath!.isNotEmpty
+                        ? _createBackup
+                        : null,
+                    icon: const Icon(Icons.add),
+                    label: const Text('新建备份'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
 
-            if (widget.game.saveDataPath == null ||
-                widget.game.saveDataPath!.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.warning, color: Colors.orange[600]),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        '请先在游戏设置中配置存档路径才能创建备份',
-                        style: TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else if (_backups.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(32),
-                child: const Center(
-                  child: Column(
+              if (widget.game.saveDataPath == null ||
+                  widget.game.saveDataPath!.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Row(
                     children: [
-                      Icon(Icons.folder_open, size: 48, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
-                        '还没有存档备份',
-                        style: TextStyle(fontSize: 16, color: Colors.grey),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        '点击"新建备份"来创建第一个备份',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      Icon(Icons.warning, color: Colors.orange[600]),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          '请先在游戏设置中配置存档路径才能创建备份',
+                          style: TextStyle(fontSize: 14),
+                        ),
                       ),
                     ],
                   ),
+                )
+              else if (backups.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  child: const Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.folder_open, size: 48, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          '还没有存档备份',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '点击"新建备份"来创建第一个备份',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: backups.length,
+                  itemBuilder: (context, index) {
+                    final backup = backups[index];
+                    return _buildBackupItem(backup);
+                  },
                 ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _backups.length,
-                itemBuilder: (context, index) {
-                  final backup = _backups[index];
-                  return _buildBackupItem(backup);
-                },
-              ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   Widget _buildBackupItem(SaveBackup backup) {
@@ -944,55 +844,30 @@ class _GameDetailPageState extends ConsumerState<GameDetailPage> {
   }
 
   Widget _buildStatsSection() {
-    return Consumer(
-      builder: (context, ref, child) {
-        // 获取最新的游戏数据
-        final gamesAsyncValue = ref.watch(gameListProvider);
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '游戏统计',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-
-                gamesAsyncValue.when(
-                  data: (games) {
-                    final game = games.firstWhere(
-                      (g) => g.id == widget.game.id,
-                      orElse: () => widget.game,
-                    );
-                    return _buildStatsContent(game);
-                  },
-                  loading: () => const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-                  error: (error, stackTrace) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        '加载统计数据失败: $error',
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return Obx(() {
+      // 获取最新的游戏数据
+      final games = gameController.games;
+      final game = games[widget.game.id] ?? widget.game;
+      
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '游戏统计',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              _buildStatsContent(game),
+            ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    });
   }
 
   Widget _buildStatsContent(Game game) {

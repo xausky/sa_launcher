@@ -1,12 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 import 'package:sa_launcher/services/logging_service.dart';
+import 'package:sa_launcher/views/home_page.dart';
 import 'package:window_manager/window_manager.dart';
-import 'pages/home_page.dart';
 import 'services/app_data_service.dart';
 import 'services/init_service.dart';
+import 'controllers/controllers_binding.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +32,7 @@ void main() async {
   // 初始化应用
   await InitService.initializeApp();
   
-  runApp(const ProviderScope(child: GameLauncherApp()));
+  runApp(const GameLauncherApp());
 }
 
 class GameLauncherApp extends StatelessWidget {
@@ -39,7 +40,7 @@ class GameLauncherApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return GetMaterialApp(
       title: '游戏启动器',
       theme: ThemeData(
         fontFamily: 'Noto Sans SC',
@@ -47,6 +48,7 @@ class GameLauncherApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const HomePage(),
+      initialBinding: ControllersBinding(),
     );
   }
 }

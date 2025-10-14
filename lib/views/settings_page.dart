@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_sync_config_service.dart';
 import '../services/cloud_backup_service.dart';
-import '../providers/game_provider.dart';
+import '../controllers/game_controller.dart';
 import '../services/logging_service.dart';
 
-class SettingsPage extends ConsumerStatefulWidget {
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+  State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends ConsumerState<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage> {
+  final GameController gameController = Get.find<GameController>();
   bool _autoBackupEnabled = false;
   bool _autoSyncEnabled = false;
   bool _isLoading = true;
@@ -367,7 +368,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     if (result == CloudSyncResult.success) {
       // 重新加载应用数据并刷新游戏列表
-      await ref.read(gameListProvider.notifier).loadGames();
+      await gameController.loadGames();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

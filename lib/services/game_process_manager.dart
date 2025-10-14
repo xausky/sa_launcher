@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:async';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
 import 'package:event_tracing_windows/event_tracing_windows.dart';
 import '../models/game_process.dart';
@@ -15,7 +15,7 @@ class GameProcessManager {
   factory GameProcessManager() => _instance;
   GameProcessManager._internal();
 
-  final Map<String, GameProcessInfo> _runningGames = {};
+  final _runningGames = <String, GameProcessInfo>{}.obs;
   final Map<String, FileTrackingSession> _fileTrackingSessions = {};
   final EventTracingWindows _etw = EventTracingWindows();
   StreamSubscription<ProcessEvent>? _processSubscription;
@@ -29,8 +29,7 @@ class GameProcessManager {
   }
 
   // 获取所有正在运行的游戏
-  Map<String, GameProcessInfo> get runningGames =>
-      Map.unmodifiable(_runningGames);
+  RxMap<String, GameProcessInfo> get runningGames => _runningGames;
 
   // 获取文件追踪会话
   FileTrackingSession? getFileTrackingSession(String gameId) {
@@ -38,7 +37,7 @@ class GameProcessManager {
   }
 
   // 启动游戏并开始监控
-  Future<bool> launchGame(Ref ref, String gameId, String executablePath) async {
+  Future<bool> launchGame(String gameId, String executablePath) async {
     try {
       final file = File(executablePath);
       if (!await file.exists()) {

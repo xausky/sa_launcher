@@ -137,24 +137,6 @@ class SaveBackupService {
     }
   }
 
-  // 获取所有备份
-  static Future<List<SaveBackup>> getAllBackups() async {
-    try {
-      final games = await AppDataService.getAllGames();
-      final allBackups = <SaveBackup>[];
-      
-      for (final game in games) {
-        final gameBackups = await getGameBackups(game.id);
-        allBackups.addAll(gameBackups);
-      }
-      
-      return allBackups;
-    } catch (e) {
-      LoggingService.instance.info('获取所有备份失败: $e');
-      return [];
-    }
-  }
-
   // 删除备份
   static Future<bool> deleteBackup(
     SaveBackup backup, {
@@ -172,7 +154,7 @@ class SaveBackupService {
 
       // 如果配置了远程同步且有远程快照，也删除远程快照
       if (useRemote) {
-        await deleteRemoteBackup(cloudConfig, backup);
+        deleteRemoteBackup(cloudConfig, backup);
       }
 
       return success;
@@ -185,6 +167,9 @@ class SaveBackupService {
   static Future<void> deleteRemoteBackup(CloudSyncConfig cloudConfig, SaveBackup backup) async {
     final remoteSnapshots = await ResticService.listSnapshots(useRemote: true, cloudConfig: cloudConfig, tag: 'game:${backup.gameId}');
     final ids = remoteSnapshots.where((e) => e.time == backup.createdAt).map((e) => e.id).toList();
+    if(ids.isEmpty) {
+      return;
+    }
     await ResticService.deleteSnapshots(
       ids: ids,
       useRemote: true,

@@ -16,6 +16,8 @@ import 'package:sa_launcher/controllers/game_list_controller.dart';
 import 'package:sa_launcher/views/snacks/snacks.dart';
 
 class GameDetailPage extends GetView<GameController> {
+  GameDetailPage({super.key});
+
   final GameProcessController gameProcessController = Get.find<GameProcessController>();
 
   bool _checkPath() {

@@ -12,8 +12,6 @@ import '../controllers/game_process_controller.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_backup_service.dart';
-import '../services/logging_service.dart';
-import 'dialogs/edit_game_view.dart';
 import 'game_detail_page.dart';
 import 'settings_page.dart';
 
@@ -31,7 +29,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _checkForCloudUpdates();
 
     // 设置自动备份消息回调
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -48,46 +45,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 检查云端更新
-  Future<void> _checkForCloudUpdates() async {
-    try {
-      final hasUpdates = await CloudBackupService.hasCloudUpdates();
-      if (hasUpdates && mounted) {
-        _showCloudUpdateDialog();
-      }
-    } catch (e) {
-      LoggingService.instance.info('检查云端更新失败: $e');
-    }
-  }
-
-  // 显示云端更新对话框
-  void _showCloudUpdateDialog() async {
-    final download = await Dialogs.showCloudUpdateDialog();
-    if (download) {
-      _downloadFromCloud();
-    }
-  }
-
-  // 从云端下载
-  Future<void> _downloadFromCloud() async {
-    try {
-      final result = await CloudBackupService.downloadFromCloud(
-        skipConfirmation: true,
-      );
-
-      if (result == CloudSyncResult.success) {
-        // 重新加载游戏列表
-        await gameController.loadGames();
-
-        Snacks.success('云端配置下载成功，游戏列表已更新');
-      } else if (result != CloudSyncResult.noChanges) {
-        Snacks.error('下载失败: ${CloudBackupService.getSyncResultMessage(result)}');
-      }
-    } catch (e) {
-      Snacks.error('下载失败: $e');
-    }
-  }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(

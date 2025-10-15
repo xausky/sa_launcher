@@ -7,9 +7,9 @@ import 'package:sa_launcher/services/logging_service.dart';
 import 'package:sa_launcher/services/restic_service.dart';
 import 'package:sa_launcher/views/dialogs/dialogs.dart';
 import 'package:sa_launcher/views/home_page.dart';
+import 'package:sa_launcher/views/init_page.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/app_data_service.dart';
-import 'services/init_service.dart';
 import 'controllers/bindings/main_binding.dart';
 
 void main() async {
@@ -28,15 +28,12 @@ void main() async {
       await windowManager.show();
       await windowManager.focus();
     });
-    windowManager.addListener(new MyWindowListener());
+    windowManager.addListener(MyWindowListener());
     await windowManager.setPreventClose(true);
   }
   await LoggingService.instance.initialize();
   LoggingService.instance.info('AppDataDirectory ${await AppDataService.getAppDataDirectory()}');
 
-  // 初始化应用
-  await InitService.initializeApp();
-  
   runApp(const GameLauncherApp());
 }
 
@@ -52,7 +49,7 @@ class GameLauncherApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const HomePage(),
+      home: const InitPage(),
       initialBinding: MainBinding(),
     );
   }
@@ -61,6 +58,7 @@ class GameLauncherApp extends StatelessWidget {
 class MyWindowListener extends WindowListener {
   @override
   void onWindowClose() async {
+    await windowManager.hide();
     Dialogs.showProgressDialog('正在清理遗留数据', () async {
       try {
         LoggingService.instance.info("程序即将退出，清理 restic 锁");

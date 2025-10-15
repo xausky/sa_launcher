@@ -49,6 +49,24 @@ jobs:
       - name: Build Windows
         run: flutter build windows
 
+      - name: Download and setup restic
+        run: |
+          $resticVersion = "0.18.1"
+          $resticUrl = "https://github.com/restic/restic/releases/download/v$resticVersion/restic_${resticVersion}_windows_amd64.zip"
+          $resticZip = "restic_$resticVersion.zip"
+          $toolsDir = "build/windows/x64/runner/Release/tools"
+
+          Invoke-WebRequest -Uri $resticUrl -OutFile $resticZip
+          New-Item -ItemType Directory -Force -Path $toolsDir
+          Expand-Archive -Path $resticZip -DestinationPath $toolsDir -Force
+
+          # Move restic exe regardless of version in filename
+          Get-ChildItem -Path $toolsDir -Name "restic_*.exe" | ForEach-Object {
+            Move-Item -Path "$toolsDir/$_" -Destination "$toolsDir/restic.exe" -Force
+          }
+
+          Remove-Item $resticZip
+
       - name: Set short SHA
         id: short_sha
         run: echo "SHORT_SHA=$(git log --oneline | head -n 1 | awk '{ print $1 }')" >> $GITHUB_OUTPUT

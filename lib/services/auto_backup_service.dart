@@ -275,22 +275,21 @@ class AutoBackupService {
 
       // 计算时间差（以分钟为单位）
       final timeDifference = autoBackup.createdAt.difference(latestModifyTime);
-      final minutesDifference = timeDifference.inMinutes.abs();
+      final secondsDifference = timeDifference.inSeconds.abs();
 
       // 只有当自动备份比存档目录更新且相差超过1分钟时，才建议应用
-      if (autoBackup.createdAt.isAfter(latestModifyTime) &&
-          minutesDifference > 1) {
+      if (autoBackup.createdAt.isAfter(latestModifyTime) && secondsDifference > 60) {
         LoggingService.instance.info('自动备份比当前存档更新超过1分钟，建议应用: ${game.title}');
         LoggingService.instance.info('自动备份时间: ${autoBackup.createdAt}');
         LoggingService.instance.info('存档最新时间: $latestModifyTime');
-        LoggingService.instance.info('时间差: ${minutesDifference}分钟');
+        LoggingService.instance.info('时间差: $secondsDifference秒');
 
         return BackupCheckResult(
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
           saveDataTime: latestModifyTime,
           shouldSyncCloud: hasCloudUpdates,
-          reason: '自动备份更新（相差${minutesDifference}分钟）',
+          reason: '自动备份更新（相差$secondsDifference秒）',
         );
       }
 

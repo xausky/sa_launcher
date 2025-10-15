@@ -23,7 +23,7 @@ class ResticBackupResult {
     return ResticBackupResult(
       totalFilesProcessed: json['total_files_processed'] as int,
       totalBytesProcessed: json['total_bytes_processed'] as int,
-      backupStart: DateTime.parse(json['backup_start'] as String),
+      backupStart: DateTime.parse(json['backup_start'] as String).toLocal(),
       snapshotId: json['snapshot_id'] as String,
     );
   }
@@ -63,7 +63,7 @@ class ResticSnapshot {
 
   factory ResticSnapshot.fromJson(Map<String, dynamic> json) {
     return ResticSnapshot(
-      time: DateTime.parse(json['time'] as String),
+      time: DateTime.parse(json['time'] as String).toLocal(),
       summary: ResticSnapshotSummary.fromJson(json['summary'] as Map<String, dynamic>),
       tags: List<String>.from(json['tags'] as List),
       id: json['id'] as String,

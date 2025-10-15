@@ -7,7 +7,6 @@ import 'package:sa_launcher/services/logging_service.dart';
 import 'package:sa_launcher/services/restic_service.dart';
 import 'package:sa_launcher/views/dialogs/dialogs.dart';
 import 'package:sa_launcher/views/home_page.dart';
-import 'package:sa_launcher/views/snacks/snacks.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/app_data_service.dart';
 import 'services/init_service.dart';

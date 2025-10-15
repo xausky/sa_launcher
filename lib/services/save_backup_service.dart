@@ -94,7 +94,7 @@ class SaveBackupService {
 
       final backups = <SaveBackup>[];
 
-      // 获取本地快照
+      // 获取快照
       final snapshots = await ResticService.listSnapshots(
         useRemote: useRemote,
         tag: 'game:$gameId',

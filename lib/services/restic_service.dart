@@ -252,6 +252,7 @@ class ResticService {
         '--repo', repoPath,
         'backup', '.',
         '--json',
+        '--quiet',
         '--no-scan',
       ];
       
@@ -268,8 +269,7 @@ class ResticService {
       
       if (result.exitCode == 0) {
         // 解析 JSON 输出获取备份结果
-        final output = _getLastNonEmptyLine(result.stdout);
-        return ResticBackupResult.fromJson(jsonDecode(output!));
+        return ResticBackupResult.fromJson(jsonDecode(result.stdout));
       } else {
         LoggingService.instance.info('创建备份失败: ${result.stderr}');
       }
@@ -427,10 +427,6 @@ class ResticService {
     );
 
     if (result.exitCode == 0) {
-      await _executeResticCommand(
-        ['--repo', repoPath, 'prune'],
-        environment: env,
-      );
       return true;
     } else {
       LoggingService.instance.info('清理快照失败: ${result.stderr}');
@@ -485,6 +481,42 @@ class ResticService {
       }
     } catch (e) {
       LoggingService.instance.info('删除快照异常: $e');
+      return false;
+    }
+  }
+
+  // 检查仓库状态
+  static Future<bool> pruneRepository({
+    bool useRemote = false,
+    CloudSyncConfig? cloudConfig,
+  }) async {
+    try {
+      String repoPath;
+      Map<String, String>? env;
+
+      if (useRemote && cloudConfig != null) {
+        repoPath = 's3:${cloudConfig.endPoint}/${cloudConfig.bucket}/${cloudConfig.objectPath}';
+        env = <String, String>{
+          'AWS_ACCESS_KEY_ID': cloudConfig.accessKey,
+          'AWS_SECRET_ACCESS_KEY': cloudConfig.secretKey,
+        };
+      } else {
+        final repoDir = await getLocalResticRepository();
+        repoPath = repoDir.path;
+        env = null;
+      }
+
+      final result = await _executeResticCommand(
+        [
+          '--repo', repoPath,
+          'prune',
+        ],
+        environment: env,
+      );
+
+      return result.exitCode == 0;
+    } catch (e) {
+      LoggingService.instance.info('清理仓库异常: $e');
       return false;
     }
   }

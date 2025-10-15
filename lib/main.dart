@@ -62,9 +62,11 @@ class MyWindowListener extends WindowListener {
     Dialogs.showProgressDialog('正在清理遗留数据', () async {
       try {
         LoggingService.instance.info("程序即将退出，清理 restic 锁");
-        await ResticService.unlockRepository();
         final cloudSyncConfig = await CloudSyncConfigService.getCloudSyncConfig();
+        await ResticService.pruneRepository();
+        await ResticService.unlockRepository();
         if(cloudSyncConfig != null) {
+          await ResticService.pruneRepository(useRemote: true, cloudConfig: cloudSyncConfig);
           await ResticService.unlockRepository(useRemote: true, cloudConfig: cloudSyncConfig);
         }
         LoggingService.instance.info("清理 restic 锁结束");

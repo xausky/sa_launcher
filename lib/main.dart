@@ -2,12 +2,16 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sa_launcher/services/cloud_sync_config_service.dart';
 import 'package:sa_launcher/services/logging_service.dart';
+import 'package:sa_launcher/services/restic_service.dart';
+import 'package:sa_launcher/views/dialogs/dialogs.dart';
 import 'package:sa_launcher/views/home_page.dart';
+import 'package:sa_launcher/views/snacks/snacks.dart';
 import 'package:window_manager/window_manager.dart';
 import 'services/app_data_service.dart';
 import 'services/init_service.dart';
-import 'controllers/controllers_binding.dart';
+import 'controllers/bindings/main_binding.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +29,8 @@ void main() async {
       await windowManager.show();
       await windowManager.focus();
     });
+    windowManager.addListener(new MyWindowListener());
+    await windowManager.setPreventClose(true);
   }
   await LoggingService.instance.initialize();
   LoggingService.instance.info('AppDataDirectory ${await AppDataService.getAppDataDirectory()}');
@@ -48,7 +54,26 @@ class GameLauncherApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const HomePage(),
-      initialBinding: ControllersBinding(),
+      initialBinding: MainBinding(),
     );
+  }
+}
+
+class MyWindowListener extends WindowListener {
+  @override
+  void onWindowClose() async {
+    Dialogs.showProgressDialog('正在清理遗留数据', () async {
+      try {
+        LoggingService.instance.info("程序即将退出，清理 restic 锁");
+        await ResticService.unlockRepository();
+        final cloudSyncConfig = await CloudSyncConfigService.getCloudSyncConfig();
+        if(cloudSyncConfig != null) {
+          await ResticService.unlockRepository(useRemote: true, cloudConfig: cloudSyncConfig);
+        }
+        LoggingService.instance.info("清理 restic 锁结束");
+      } finally {
+        exit(0);
+      }
+    });
   }
 }

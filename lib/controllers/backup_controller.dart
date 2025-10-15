@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
-import 'package:sa_launcher/controllers/game_controller.dart';
+import 'package:sa_launcher/controllers/game_list_controller.dart';
+import 'package:sa_launcher/models/game.dart';
 import 'package:sa_launcher/models/save_backup.dart';
 import 'package:sa_launcher/services/save_backup_service.dart';
 
@@ -25,7 +26,7 @@ class BackupController extends GetxController {
   }
 
   Future<void> newBackup(String name) async {
-    final game = Get.find<GameController>().getGameById(gameId);
+    final game = Get.find<GameListController>().getGameById(gameId);
     if (game == null || game.saveDataPath == null) {
       return;
     }
@@ -36,8 +37,16 @@ class BackupController extends GetxController {
     backupMap[backup.id] = backup;
   }
 
-  Future<void> applyBackup(SaveBackup backup) async {
+  Future<bool> applyBackup(SaveBackup backup) async {
+    final game = Get.find<GameListController>().getGameById(gameId);
+    if (game == null || game.saveDataPath == null) {
+      return false;
+    }
 
+    return await SaveBackupService.applyBackup(
+      backup,
+      game.saveDataPath!,
+    );
   }
 
   Future<void> deleteBackup(SaveBackup backup) async {

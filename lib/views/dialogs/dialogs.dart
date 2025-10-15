@@ -3,19 +3,27 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sa_launcher/models/file_modification.dart';
 import 'package:sa_launcher/models/game.dart';
-import 'package:sa_launcher/models/game_process.dart';
 import 'package:sa_launcher/services/auto_backup_service.dart';
 import 'edit_game_view.dart';
 import 'file_tracking_results_view.dart';
 
 class Dialogs {
 
-  static Future<void> showProgressDialog(String name, AsyncCallback runner) async {
+  static Future<void> showProgressDialog<T>(String name, AsyncValueGetter<T> runner, {AsyncValueSetter<T>? result, AsyncValueSetter? error}) async {
     try {
-      Get.dialog(AlertDialog(title: Text(name), content: SizedBox(width: 100, height: 100, child: Center(child: const CircularProgressIndicator(),),)), barrierDismissible: false);
-      await runner();
-    } finally {
+      Get.dialog(AlertDialog(title: Text(name), content: SizedBox(width: 100, height: 100, child: Center(child: const CircularProgressIndicator(),),)), barrierDismissible: true);
+      final r = await runner();
       Get.back();
+      if(result != null) {
+        await result(r);
+      }
+    } catch(e) {
+      Get.back();
+      if(error != null) {
+        await error(e);
+      } else {
+        rethrow;
+      }
     }
   }
 
@@ -75,32 +83,6 @@ class Dialogs {
     )) ?? false;
   }
 
-  static Future<void> showErrorDialog(String message) async {
-    await Get.dialog(AlertDialog(
-      title: const Text('错误'),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Get.back(),
-          child: const Text('确定'),
-        ),
-      ],
-    ));
-  }
-
-  static Future<void> showSuccessDialog(String message) async {
-    await Get.dialog(AlertDialog(
-      title: const Text('成功'),
-      content: Text(message),
-      actions: [
-        TextButton(
-          onPressed: () => Get.back(),
-          child: const Text('确定'),
-        ),
-      ],
-    ));
-  }
-
   static Future<bool> showFileTrackingConfirmDialog() async {
     return await Get.dialog<bool>(
       AlertDialog(
@@ -155,7 +137,7 @@ class Dialogs {
 
   static Future<bool?> showEditGameDialog(Game game) async {
     return await Get.dialog<bool>(
-      const EditGameView(),
+      EditGameView(gameToEdit: game,), name: 'EditGame'
     );
   }
 

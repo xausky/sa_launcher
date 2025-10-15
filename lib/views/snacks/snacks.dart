@@ -11,6 +11,9 @@ class Snacks {
       backgroundColor: Colors.green,
       colorText: Colors.white,
       duration: duration ?? const Duration(seconds: 2),
+      borderRadius: 0,
+      margin: const EdgeInsets.all(0),
+      animationDuration: Duration(milliseconds: 400),
     );
   }
 
@@ -23,6 +26,9 @@ class Snacks {
       backgroundColor: Colors.red,
       colorText: Colors.white,
       duration: duration ?? const Duration(seconds: 3),
+      borderRadius: 0,
+      margin: const EdgeInsets.all(0),
+      animationDuration: Duration(milliseconds: 400),
     );
   }
 
@@ -35,6 +41,9 @@ class Snacks {
       backgroundColor: Colors.blue,
       colorText: Colors.white,
       duration: duration ?? const Duration(seconds: 2),
+      borderRadius: 0,
+      margin: const EdgeInsets.all(0),
+      animationDuration: Duration(milliseconds: 400),
     );
   }
 
@@ -47,6 +56,9 @@ class Snacks {
       backgroundColor: Colors.orange,
       colorText: Colors.white,
       duration: duration ?? const Duration(seconds: 3),
+      borderRadius: 0,
+      margin: const EdgeInsets.all(0),
+      animationDuration: Duration(milliseconds: 400),
     );
   }
 }

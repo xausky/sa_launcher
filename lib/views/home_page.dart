@@ -2,11 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:sa_launcher/controllers/backup_controller.dart';
+import 'package:sa_launcher/controllers/game_controller.dart';
 import 'package:sa_launcher/models/game_process.dart';
 import 'package:sa_launcher/views/dialogs/dialogs.dart';
 import 'package:sa_launcher/views/snacks/snacks.dart';
 import '../models/game.dart';
-import '../controllers/game_controller.dart';
+import '../controllers/game_list_controller.dart';
 import '../controllers/game_process_controller.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
@@ -24,7 +25,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final GameController gameController = Get.find<GameController>();
+  final GameListController gameController = Get.find<GameListController>();
   final GameProcessController gameProcessController = Get.find<GameProcessController>();
 
   @override
@@ -230,11 +231,12 @@ class _HomePageState extends State<HomePage> {
         );
         if (shouldApply == true) {
           // 显示应用备份的进度对话框
-          await Dialogs.showProgressDialog('正在应用自动备份', () async {
-            final applySuccess = await AutoBackupService.applyAutoBackup(game);
-            if (!applySuccess) {
-              Dialogs.showErrorDialog('应用自动备份失败');
+          await Dialogs.showProgressDialog<bool>('正在应用自动备份', () => AutoBackupService.applyAutoBackup(game),result: (r) async {
+            if (!r) {
+              Snacks.error('应用自动备份失败');
             }
+          }, error: (e) async {
+            Snacks.error('应用自动备份失败 $e');
           });
         }
       }
@@ -243,10 +245,10 @@ class _HomePageState extends State<HomePage> {
       final gameProcessController = Get.find<GameProcessController>();
       final success = await gameProcessController.launchGame(game.id, game.executablePath);
       if (!success) {
-        Dialogs.showErrorDialog('启动游戏失败');
+        Snacks.error('启动游戏失败');
       }
     } catch (e) {
-      Dialogs.showErrorDialog('启动游戏失败: $e');
+      Snacks.error('启动游戏失败: $e');
     }
   }
 
@@ -278,8 +280,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showGameDetail(BuildContext context, Game game) {
-    Get.to(() => GameDetailPage(game: game), binding: BindingsBuilder(() {
+    Get.to(() => GameDetailPage(), binding: BindingsBuilder(() {
       Get.lazyPut(() => BackupController(gameId: game.id));
+      Get.lazyPut(() => GameController(gameId: game.id));
     }));
   }
 

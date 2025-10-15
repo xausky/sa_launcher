@@ -4,49 +4,30 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:sa_launcher/controllers/backup_controller.dart';
+import 'package:sa_launcher/controllers/game_controller.dart';
 import 'package:sa_launcher/models/game_process.dart';
 import 'package:sa_launcher/services/app_data_service.dart';
 import 'package:sa_launcher/views/dialogs/dialogs.dart';
 import 'package:sa_launcher/models/game.dart';
 import 'package:sa_launcher/models/save_backup.dart';
-import 'package:sa_launcher/services/save_backup_service.dart';
 import 'package:sa_launcher/services/auto_backup_service.dart';
 import 'package:sa_launcher/controllers/game_process_controller.dart';
-import 'package:sa_launcher/controllers/game_controller.dart';
+import 'package:sa_launcher/controllers/game_list_controller.dart';
+import 'package:sa_launcher/views/snacks/snacks.dart';
 
-class GameDetailPage extends StatefulWidget {
-  final Game game;
-
-  const GameDetailPage({super.key, required this.game});
-
-  @override
-  State<GameDetailPage> createState() => _GameDetailPageState();
-}
-
-class _GameDetailPageState extends State<GameDetailPage> {
-  final GameController gameController = Get.find<GameController>();
+class GameDetailPage extends GetView<GameController> {
   final GameProcessController gameProcessController = Get.find<GameProcessController>();
 
-  @override
-  void initState() {
-    super.initState();
-
-    // 设置文件追踪回调
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      gameProcessController.setFileTrackingCallback((
-        gameId,
-        session,
-      ) {
-        if (gameId == widget.game.id && mounted) {
-          Dialogs.showFileTrackingResultsDialog(session);
-        }
-      });
-    });
+  bool _checkPath() {
+    if (controller.game.value?.saveDataPath == null || controller.game.value!.saveDataPath!.isEmpty) {
+      Snacks.error('请先在游戏设置中配置存档路径');
+      return false;
+    }
+    return true;
   }
 
   Future<void> _createBackup() async {
-    if (widget.game.saveDataPath == null || widget.game.saveDataPath!.isEmpty) {
-      Dialogs.showErrorDialog('请先在游戏设置中配置存档路径');
+    if(!_checkPath()) {
       return;
     }
     final name = await Dialogs.showInputDialog("创建备份", "请输入备份名称");
@@ -59,8 +40,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
 
 
   Future<void> _applyBackup(SaveBackup backup) async {
-    if (widget.game.saveDataPath == null || widget.game.saveDataPath!.isEmpty) {
-      Dialogs.showErrorDialog('请先在游戏设置中配置存档路径');
+    if(!_checkPath()) {
       return;
     }
 
@@ -70,19 +50,17 @@ class _GameDetailPageState extends State<GameDetailPage> {
     );
 
     if (confirmed) {
-      try {
-        final success = await SaveBackupService.applyBackup(
-          backup,
-          widget.game.saveDataPath!,
-        );
+      if (confirmed) {
+        await Dialogs.showProgressDialog("正在应用备份", () => Get.find<BackupController>().applyBackup(backup), result: (r) async {
+          if(r) {
+            Snacks.success("应用备份成功");
+          } else {
+            Snacks.success("应用备份失败");
+          }
+        }, error: (e) async {
+          Snacks.error("应用备份失败 $e");
+        });
 
-        if (success) {
-          Dialogs.showSuccessDialog('存档备份应用成功');
-        } else {
-          Dialogs.showErrorDialog('存档备份应用失败');
-        }
-      } catch (e) {
-        Dialogs.showErrorDialog('存档备份应用失败: $e');
       }
     }
   }
@@ -100,21 +78,19 @@ class _GameDetailPageState extends State<GameDetailPage> {
     }
   }
 
-
-
   Future<void> _editGame() async {
-    await Dialogs.showEditGameDialog(widget.game);
+    await Dialogs.showEditGameDialog(controller.game.value!);
   }
 
   Future<void> _launchGame() async {
     try {
       final success = await gameProcessController
-          .launchGame(widget.game.id, widget.game.executablePath);
+          .launchGame(controller.game.value!.id, controller.game.value!.executablePath);
       if (!success) {
-        Dialogs.showErrorDialog('启动游戏失败');
+        Snacks.error('启动游戏失败');
       }
     } catch (e) {
-      Dialogs.showErrorDialog('启动游戏失败: $e');
+      Snacks.error('启动游戏失败: $e');
     }
   }
 
@@ -125,14 +101,14 @@ class _GameDetailPageState extends State<GameDetailPage> {
     try {
       final success = await gameProcessController
           .launchGameWithFileTracking(
-            widget.game.id,
-            widget.game.executablePath,
+        controller.game.value!.id,
+        controller.game.value!.executablePath,
           );
       if (!success) {
-        Dialogs.showErrorDialog('启动游戏失败');
+        Snacks.error('启动游戏失败');
       }
     } catch (e) {
-      Dialogs.showErrorDialog('启动游戏失败: $e');
+      Snacks.error('启动游戏失败: $e');
     }
   }
 
@@ -140,10 +116,13 @@ class _GameDetailPageState extends State<GameDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final info = gameProcessController.runningGames[widget.game.id];
+      if(controller.game.value == null) {
+        return Center(child: CircularProgressIndicator(),);
+      }
+      final info = gameProcessController.runningGames[controller.game.value!.id];
       return Scaffold(
         appBar: AppBar(
-          title: Text(widget.game.title),
+          title: Text(controller.game.value!.title),
           backgroundColor: Theme.of(context).colorScheme.inversePrimary,
           actions: [
             IconButton(
@@ -163,11 +142,11 @@ class _GameDetailPageState extends State<GameDetailPage> {
               const SizedBox(height: 24),
 
               // 游戏统计信息
-              _buildStatsSection(),
+              _buildStatsSection(context),
               const SizedBox(height: 24),
 
               // 存档备份管理
-              _buildBackupSection(),
+              _buildBackupSection(context),
             ],
           ),
         ),
@@ -195,7 +174,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
                   ),
                   child: FutureBuilder<String?>(
                     future: AppDataService.getGameCoverPath(
-                      widget.game.coverImageFileName,
+                      controller.game.value!.coverImageFileName,
                     ),
                     builder: (context, snapshot) {
                       final coverPath = snapshot.data;
@@ -233,10 +212,10 @@ class _GameDetailPageState extends State<GameDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildPathInfoRow('执行文件', widget.game.executablePath),
-                      if (widget.game.saveDataPath != null &&
-                          widget.game.saveDataPath!.isNotEmpty)
-                        _buildPathInfoRow('存档路径', widget.game.saveDataPath!),
+                      _buildPathInfoRow('执行文件', controller.game.value!.executablePath),
+                      if (controller.game.value!.saveDataPath != null &&
+                          controller.game.value!.saveDataPath!.isNotEmpty)
+                        _buildPathInfoRow('存档路径', controller.game.value!.saveDataPath!),
                       if (info?.isRunning ?? false)
                         _buildInfoRow(
                           '运行状态',
@@ -245,7 +224,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
                         ),
                       _buildInfoRow(
                         '添加时间',
-                        _formatDateTime(widget.game.createdAt),
+                        _formatDateTime(controller.game.value!.createdAt),
                       ),
                     ],
                   ),
@@ -286,7 +265,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
                 ElevatedButton.icon(
                   onPressed: () async {
                     await gameProcessController
-                        .killGame(widget.game.id);
+                        .killGame(controller.game.value!.id);
                   },
                   icon: const Icon(Icons.stop),
                   label: const Text('停止游戏'),
@@ -386,11 +365,11 @@ class _GameDetailPageState extends State<GameDetailPage> {
       // 使用 Windows 的 explorer 命令打开目录
       await Process.run('explorer', [directoryPath]);
     } catch (e) {
-      Dialogs.showErrorDialog('打开目录失败: $e');
+      Snacks.error('打开目录失败: $e');
     }
   }
 
-  Widget _buildBackupSection() {
+  Widget _buildBackupSection(BuildContext context) {
     return Obx(() {
       final backups = AutoBackupService.sortBackupsWithAutoFirst(Get.find<BackupController>().backupMap.values.toList());
       return Card(
@@ -404,14 +383,12 @@ class _GameDetailPageState extends State<GameDetailPage> {
                 children: [
                   Text(
                     '存档备份',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    style: context.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   ElevatedButton.icon(
                     onPressed:
-                    widget.game.saveDataPath != null &&
-                        widget.game.saveDataPath!.isNotEmpty
+                    controller.game.value!.saveDataPath != null &&
+                        controller.game.value!.saveDataPath!.isNotEmpty
                         ? _createBackup
                         : null,
                     icon: const Icon(Icons.add),
@@ -421,8 +398,8 @@ class _GameDetailPageState extends State<GameDetailPage> {
               ),
               const SizedBox(height: 16),
 
-              if (widget.game.saveDataPath == null ||
-                  widget.game.saveDataPath!.isEmpty)
+              if (controller.game.value!.saveDataPath == null ||
+                  controller.game.value!.saveDataPath!.isEmpty)
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -543,12 +520,9 @@ class _GameDetailPageState extends State<GameDetailPage> {
     );
   }
 
-  Widget _buildStatsSection() {
+  Widget _buildStatsSection(BuildContext context) {
     return Obx(() {
-      // 获取最新的游戏数据
-      final games = gameController.games;
-      final game = games[widget.game.id] ?? widget.game;
-      
+      final game = controller.game.value!;
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -557,9 +531,7 @@ class _GameDetailPageState extends State<GameDetailPage> {
             children: [
               Text(
                 '游戏统计',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: context.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               _buildStatsContent(game),

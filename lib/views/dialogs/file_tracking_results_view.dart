@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 import 'package:sa_launcher/views/dialogs/dialogs.dart';
+import 'package:sa_launcher/views/snacks/snacks.dart';
 
 import '../../models/file_modification.dart';
 import '../../models/game_process.dart';
@@ -287,7 +288,7 @@ class FileTrackingResultsView extends StatelessWidget {
       // 使用 Windows 的 explorer 命令打开目录
       await Process.run('explorer', [directoryPath]);
     } catch (e) {
-      Dialogs.showErrorDialog('打开目录失败: $e');
+      Snacks.error('打开目录失败: $e');
     }
   }
 }

@@ -4,10 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as path;
+import 'package:sa_launcher/views/snacks/snacks.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sa_launcher/models/game.dart';
-import 'package:sa_launcher/controllers/game_controller.dart';
+import 'package:sa_launcher/controllers/game_list_controller.dart';
 import 'package:sa_launcher/services/game_storage.dart';
 import 'package:sa_launcher/services/game_launcher.dart';
 import 'package:sa_launcher/services/app_data_service.dart';
@@ -29,7 +30,7 @@ class _EditGameViewState extends State<EditGameView> {
   final _saveDataPathController = TextEditingController();
   final _focusNode = FocusNode();
 
-  final GameController gameController = Get.find<GameController>();
+  final GameListController gameController = Get.find<GameListController>();
 
   String? _coverImagePath;
   bool _isLoading = false;
@@ -83,7 +84,7 @@ class _EditGameViewState extends State<EditGameView> {
         }
       }
     } catch (e) {
-      Dialogs.showErrorDialog('选择文件失败: $e');
+      Snacks.error('选择文件失败: $e');
     }
   }
 
@@ -97,7 +98,7 @@ class _EditGameViewState extends State<EditGameView> {
         _saveDataPathController.text = selectedDirectory;
       }
     } catch (e) {
-      Dialogs.showErrorDialog('选择文件夹失败: $e');
+      Snacks.error('选择文件夹失败: $e');
     }
   }
 
@@ -116,7 +117,7 @@ class _EditGameViewState extends State<EditGameView> {
         });
       }
     } catch (e) {
-      Dialogs.showErrorDialog('选择图片失败: $e');
+      Snacks.error('选择图片失败: $e');
     }
   }
 
@@ -124,7 +125,7 @@ class _EditGameViewState extends State<EditGameView> {
     try {
       final clipboard = SystemClipboard.instance;
       if (clipboard == null) {
-        Dialogs.showErrorDialog('此平台不支持剪切板功能');
+        Snacks.error('此平台不支持剪切板功能');
         return;
       }
 
@@ -154,14 +155,14 @@ class _EditGameViewState extends State<EditGameView> {
               _coverImageChanged = true;
             });
           } catch (e) {
-            Dialogs.showErrorDialog('处理剪切板图像失败: $e');
+            Snacks.error('处理剪切板图像失败: $e');
           }
         });
       } else {
-        Dialogs.showErrorDialog('剪切板中没有图像数据');
+        Snacks.error('剪切板中没有图像数据');
       }
     } catch (e) {
-      Dialogs.showErrorDialog('读取剪切板失败: $e');
+      Snacks.error('读取剪切板失败: $e');
     }
   }
 
@@ -175,7 +176,7 @@ class _EditGameViewState extends State<EditGameView> {
   Future<void> _searchGameOnIGDB() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      Dialogs.showErrorDialog('请先输入游戏标题');
+      Snacks.error('请先输入游戏标题');
       return;
     }
 
@@ -184,10 +185,10 @@ class _EditGameViewState extends State<EditGameView> {
       if (await canLaunchUrl(Uri.parse(url))) {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       } else {
-        Dialogs.showErrorDialog('无法打开浏览器');
+        Snacks.error('无法打开浏览器');
       }
     } catch (e) {
-      Dialogs.showErrorDialog('打开链接失败: $e');
+      Snacks.error('打开链接失败: $e');
     }
   }
 
@@ -252,11 +253,11 @@ class _EditGameViewState extends State<EditGameView> {
         await gameController.addGame(game);
       }
 
-      if (mounted) {
-        Get.back(result: true);
+      if(mounted) {
+        Get.until((route) => !Get.isDialogOpen!);
       }
     } catch (e) {
-      Dialogs.showErrorDialog('保存游戏失败: $e');
+      Snacks.error('保存游戏失败: $e');
     } finally {
       setState(() {
         _isLoading = false;

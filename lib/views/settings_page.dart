@@ -5,7 +5,7 @@ import 'package:sa_launcher/views/snacks/snacks.dart';
 import '../services/app_data_service.dart';
 import '../services/cloud_sync_config_service.dart';
 import '../services/cloud_backup_service.dart';
-import '../controllers/game_controller.dart';
+import '../controllers/game_list_controller.dart';
 import '../services/logging_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -16,7 +16,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final GameController gameController = Get.find<GameController>();
+  final GameListController gameController = Get.find<GameListController>();
   bool _autoBackupEnabled = false;
   bool _autoSyncEnabled = false;
   bool _isLoading = true;

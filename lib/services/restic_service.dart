@@ -652,28 +652,4 @@ class ResticService {
     return true;
   }
 
-
-  static String? _getLastNonEmptyLine(String text) {
-    // 1. 将字符串按行分割成列表
-    // 使用 \r?\n 来处理不同操作系统的换行符（\n, \r\n）
-    // split() 可能会在末尾产生一个空字符串，这通常在后续处理中被忽略或剔除
-    List<String> lines = text.split(RegExp(r'\r?\n'));
-
-    // 2. 从后往前遍历列表
-    for (int i = lines.length - 1; i >= 0; i--) {
-      String line = lines[i];
-
-      // 3. 检查当前行是否为非空行
-      // trim() 方法用于移除字符串两端的空白字符（包括空格、制表符、换行符等）。
-      // isNotEmpty 检查移除空白后字符串是否还有内容。
-      if (line.trim().isNotEmpty) {
-        // 找到了，返回该行原始内容
-        return line;
-      }
-    }
-
-    // 如果所有行都是空行或字符串本身为空，则返回 null (或您可以返回空字符串 "")
-    return null;
-  }
-
 }

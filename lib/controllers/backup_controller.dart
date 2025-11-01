@@ -1,6 +1,5 @@
 import 'package:get/get.dart';
 import 'package:sa_launcher/controllers/game_list_controller.dart';
-import 'package:sa_launcher/models/game.dart';
 import 'package:sa_launcher/models/save_backup.dart';
 import 'package:sa_launcher/services/save_backup_service.dart';
 

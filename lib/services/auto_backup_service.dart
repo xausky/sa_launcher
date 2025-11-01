@@ -11,14 +11,12 @@ import 'save_backup_service.dart';
 // 备份检查结果
 class BackupCheckResult {
   final bool shouldApply;
-  final bool shouldSyncCloud;
   final DateTime? autoBackupTime;
   final DateTime? saveDataTime;
   final String reason;
 
   BackupCheckResult({
     required this.shouldApply,
-    required this.shouldSyncCloud,
     this.autoBackupTime,
     this.saveDataTime,
     required this.reason,
@@ -222,14 +220,11 @@ class AutoBackupService {
     Game game,
   ) async {
     try {
-      // 检查云端是否有更新（在检查本地自动备份之前）
-      final hasCloudUpdates = false;
 
       // 检查游戏是否配置了存档路径
       if (game.saveDataPath == null || game.saveDataPath!.isEmpty) {
         return BackupCheckResult(
           shouldApply: false,
-          shouldSyncCloud: hasCloudUpdates,
           reason: '未配置存档路径',
         );
       }
@@ -239,7 +234,6 @@ class AutoBackupService {
       if (autoBackup == null) {
         return BackupCheckResult(
           shouldApply: false,
-          shouldSyncCloud: hasCloudUpdates,
           reason: '没有可用的自动备份',
         );
       }
@@ -253,7 +247,6 @@ class AutoBackupService {
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
           saveDataTime: null,
-          shouldSyncCloud: hasCloudUpdates,
           reason: '存档目录不存在',
         );
       }
@@ -268,7 +261,6 @@ class AutoBackupService {
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
           saveDataTime: null,
-          shouldSyncCloud: hasCloudUpdates,
           reason: '存档目录为空',
         );
       }
@@ -288,7 +280,6 @@ class AutoBackupService {
           shouldApply: true,
           autoBackupTime: autoBackup.createdAt,
           saveDataTime: latestModifyTime,
-          shouldSyncCloud: hasCloudUpdates,
           reason: '自动备份更新（相差$secondsDifference秒）',
         );
       }
@@ -297,14 +288,12 @@ class AutoBackupService {
         shouldApply: false,
         autoBackupTime: autoBackup.createdAt,
         saveDataTime: latestModifyTime,
-        shouldSyncCloud: hasCloudUpdates,
         reason: '当前存档已是最新',
       );
     } catch (e) {
       LoggingService.instance.info('检查启动前备份应用失败: $e');
       return BackupCheckResult(
         shouldApply: false,
-        shouldSyncCloud: false,
         reason: '检查失败: $e',
       );
     }

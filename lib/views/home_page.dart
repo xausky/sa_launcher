@@ -11,7 +11,6 @@ import '../controllers/game_list_controller.dart';
 import '../controllers/game_process_controller.dart';
 import '../services/auto_backup_service.dart';
 import '../services/app_data_service.dart';
-import '../services/cloud_backup_service.dart';
 import 'game_detail_page.dart';
 import 'settings_page.dart';
 
@@ -124,7 +123,6 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final runningGames = Get.find<GameProcessController>().runningGames;
 
     return Obx(() {
       final gameList = games.values.toList();
@@ -142,16 +140,18 @@ class _HomePageState extends State<HomePage> {
           itemCount: gameList.length,
           itemBuilder: (context, index) {
             final game = gameList[index];
-            final info = runningGames[game.id];
-            return GameCard(
-              game: game,
-              info: info,
-              onLaunch: () => _launchGame(context, game),
-              onEdit: () => _editGame(context, game),
-              onDelete: () => _deleteGame(context, game),
-              onDetail: () => _showGameDetail(context, game),
-              onKill: () => _killGame(context, game),
-            );
+            return Obx(() {
+              final info = gameProcessController.runningGames[game.id];
+              return GameCard(
+                game: game,
+                info: info,
+                onLaunch: () => _launchGame(context, game),
+                onEdit: () => _editGame(context, game),
+                onDelete: () => _deleteGame(context, game),
+                onDetail: () => _showGameDetail(context, game),
+                onKill: () => _killGame(context, game),
+              );
+            });
           },
         ),
       );
@@ -168,19 +168,6 @@ class _HomePageState extends State<HomePage> {
       var checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
         game,
       );
-
-      if (checkResult.shouldSyncCloud) {
-        final shouldApply = await Dialogs.showConfirmDialog(
-          '发现云端更新',
-          '检测到云端有更新的配置和存档备份。\n\n是否要从云端下载最新版本？',
-        );
-        if (shouldApply == true) {
-          await CloudBackupService.downloadFromCloud(skipConfirmation: true);
-          checkResult = await AutoBackupService.checkAutoBackupBeforeLaunch(
-            game,
-          );
-        }
-      }
 
       if (checkResult.shouldApply) {
         final shouldApply = await Dialogs.showAutoBackupDialog(
@@ -200,7 +187,6 @@ class _HomePageState extends State<HomePage> {
       }
 
       // 启动游戏
-      final gameProcessController = Get.find<GameProcessController>();
       final success = await gameProcessController.launchGame(game.id, game.executablePath);
       if (!success) {
         Snacks.error('启动游戏失败');

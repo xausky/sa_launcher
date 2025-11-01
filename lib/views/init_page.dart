@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -217,7 +216,7 @@ class _InitPageState extends State<InitPage> with TickerProviderStateMixin {
               const SizedBox(height: 32),
 
               // 进度条
-              Container(
+              SizedBox(
                 width: 300,
                 child: LinearProgressIndicator(
                   value: _displayedProgress,

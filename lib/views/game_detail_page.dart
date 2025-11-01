@@ -12,7 +12,6 @@ import 'package:sa_launcher/models/game.dart';
 import 'package:sa_launcher/models/save_backup.dart';
 import 'package:sa_launcher/services/auto_backup_service.dart';
 import 'package:sa_launcher/controllers/game_process_controller.dart';
-import 'package:sa_launcher/controllers/game_list_controller.dart';
 import 'package:sa_launcher/views/snacks/snacks.dart';
 
 class GameDetailPage extends GetView<GameController> {

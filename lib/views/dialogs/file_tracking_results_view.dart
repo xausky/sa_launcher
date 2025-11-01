@@ -4,11 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
-import 'package:sa_launcher/views/dialogs/dialogs.dart';
 import 'package:sa_launcher/views/snacks/snacks.dart';
 
 import '../../models/file_modification.dart';
-import '../../models/game_process.dart';
 
 class FileTrackingResultsView extends StatelessWidget {
   final FileTrackingSession session;

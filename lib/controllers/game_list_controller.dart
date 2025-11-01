@@ -127,6 +127,7 @@ class GameListController extends GetxController {
   }
 
   // 刷新游戏列表
+  @override
   Future<void> refresh() async {
     await loadGames();
   }

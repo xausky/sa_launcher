@@ -1,25 +1,38 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:sa_launcher/models/file_modification.dart';
+
 import 'package:sa_launcher/models/game.dart';
 import 'package:sa_launcher/services/auto_backup_service.dart';
 import 'edit_game_view.dart';
-import 'file_tracking_results_view.dart';
 
 class Dialogs {
-
-  static Future<void> showProgressDialog<T>(String name, AsyncValueGetter<T> runner, {AsyncValueSetter<T>? result, AsyncValueSetter? error}) async {
+  static Future<void> showProgressDialog<T>(
+    String name,
+    AsyncValueGetter<T> runner, {
+    AsyncValueSetter<T>? result,
+    AsyncValueSetter? error,
+  }) async {
     try {
-      Get.dialog(AlertDialog(title: Text(name), content: SizedBox(width: 100, height: 100, child: Center(child: const CircularProgressIndicator(),),)), barrierDismissible: true);
+      Get.dialog(
+        AlertDialog(
+          title: Text(name),
+          content: SizedBox(
+            width: 100,
+            height: 100,
+            child: Center(child: const CircularProgressIndicator()),
+          ),
+        ),
+        barrierDismissible: true,
+      );
       final r = await runner();
       Get.back();
-      if(result != null) {
+      if (result != null) {
         await result(r);
       }
-    } catch(e) {
+    } catch (e) {
       Get.back();
-      if(error != null) {
+      if (error != null) {
         await error(e);
       } else {
         rethrow;
@@ -31,119 +44,68 @@ class Dialogs {
     final controller = TextEditingController();
     final now = DateTime.now();
     controller.text =
-    '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    return Get.dialog<String?>(AlertDialog(
-      title: Text(title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 16),
-          TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: hintText,
-              border: OutlineInputBorder(),
-            ),
-            autofocus: true,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Get.back(result: null),
-          child: const Text('取消'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            final name = controller.text.trim();
-            if (name.isNotEmpty) {
-              Get.back(result: name);
-            }
-          },
-          child: const Text('创建'),
-        ),
-      ],
-    ));
-  }
-
-  static Future<bool> showConfirmDialog(String title, String content) async {
-    return await Get.dialog<bool>(AlertDialog(
-      title: Text(title),
-      content: Text(content),
-      actions: [
-        TextButton(
-          onPressed: () => Get.back(result: false),
-          child: const Text('取消'),
-        ),
-        ElevatedButton(
-          onPressed: () => Get.back(result: true),
-          child: const Text('确定'),
-        ),
-      ],
-    )) ?? false;
-  }
-
-  static Future<bool> showFileTrackingConfirmDialog() async {
-    return await Get.dialog<bool>(
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return Get.dialog<String?>(
       AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.track_changes, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('启动游戏并追踪文件修改'),
-          ],
-        ),
-        content: const Column(
+        title: Text(title),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('此功能将：', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('1. 启动游戏并且追踪游戏对计算机文件的修改。'),
-            SizedBox(height: 4),
-            Text('2. 在游戏运行结束后显示所有修改的文件列表和修改次数。'),
-            SizedBox(height: 4),
-            Text('3. 用于对于不知道存档目录的游戏追踪存档目录使用。'),
-            SizedBox(height: 12),
-            Text(
-              '注意：',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.orange,
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: hintText,
+                border: OutlineInputBorder(),
               ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              '使用本方法运行游戏会对游戏性能以及系统性能产生一定负面影响。',
-              style: TextStyle(color: Colors.orange),
+              autofocus: true,
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Get.back(result: false),
+            onPressed: () => Get.back(result: null),
             child: const Text('取消'),
           ),
           ElevatedButton(
-            onPressed: () => Get.back(result: true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text('确定启动'),
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                Get.back(result: name);
+              }
+            },
+            child: const Text('创建'),
           ),
         ],
       ),
-    ) ??
+    );
+  }
+
+  static Future<bool> showConfirmDialog(String title, String content) async {
+    return await Get.dialog<bool>(
+          AlertDialog(
+            title: Text(title),
+            content: Text(content),
+            actions: [
+              TextButton(
+                onPressed: () => Get.back(result: false),
+                child: const Text('取消'),
+              ),
+              ElevatedButton(
+                onPressed: () => Get.back(result: true),
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+        ) ??
         false;
   }
 
   static Future<bool?> showEditGameDialog(Game game) async {
     return await Get.dialog<bool>(
-      EditGameView(gameToEdit: game,), name: 'EditGame'
+      EditGameView(gameToEdit: game),
+      name: 'EditGame',
     );
-  }
-
-  static Future<void> showFileTrackingResultsDialog(
-      FileTrackingSession session) async {
-    await Get.dialog(FileTrackingResultsView(session: session));
   }
 
   static Future<bool> showCloudUpdateDialog() async {
@@ -167,9 +129,7 @@ class Dialogs {
   }
 
   static Future<bool?> showAddGameDialog() async {
-    return await Get.dialog<bool>(
-      const EditGameView(),
-    );
+    return await Get.dialog<bool>(const EditGameView());
   }
 
   static Future<bool?> showAutoBackupDialog(

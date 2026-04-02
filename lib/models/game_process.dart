@@ -42,5 +42,4 @@ class GameProcessInfo {
   }
 
   bool get isRunning => processIds.isNotEmpty;
-  int get processCount => processIds.length;
 }

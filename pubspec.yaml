@@ -30,9 +30,6 @@ dependencies:
   # 国际化和日期格式化
   intl: ^0.20.0
 
-  # Windows ETW 进程监控
-  event_tracing_windows: ^0.0.1
-
   # 打开链接
   url_launcher: ^6.3.2
 

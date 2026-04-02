@@ -9,6 +9,9 @@ SA Launcher 是一款功能强大的游戏启动器，使用 Flutter 开发，�
 
 ## 功能特性
 
+### 高效存储
+基于 Restic 的数据存储系统，在去重和压缩的加持下可以达到 10 以上倍的存储效率
+
 ### 🎮 游戏管理
 添加、编辑和删除游戏，支持自定义标题和封面图片
 
@@ -57,8 +60,7 @@ SA Launcher 是一款功能强大的游戏启动器，使用 Flutter 开发，�
 ## 技术架构
 
 - **UI框架**: Flutter + Material 3
-- **状态管理**: Riverpod
+- **状态管理**: GetX
 - **本地存储**: SharedPreferences
 - **云存储**: MinIO (S3 兼容)
-- **文件处理**: Archive (ZIP压缩)
 - **窗口管理**: Window Manager

@@ -17,10 +17,12 @@ import 'package:sa_launcher/views/snacks/snacks.dart';
 class GameDetailPage extends GetView<GameController> {
   GameDetailPage({super.key});
 
-  final GameProcessController gameProcessController = Get.find<GameProcessController>();
+  final GameProcessController gameProcessController =
+      Get.find<GameProcessController>();
 
   bool _checkPath() {
-    if (controller.game.value?.saveDataPath == null || controller.game.value!.saveDataPath!.isEmpty) {
+    if (controller.game.value?.saveDataPath == null ||
+        controller.game.value!.saveDataPath!.isEmpty) {
       Snacks.error('请先在游戏设置中配置存档路径');
       return false;
     }
@@ -28,7 +30,7 @@ class GameDetailPage extends GetView<GameController> {
   }
 
   Future<void> _createBackup() async {
-    if(!_checkPath()) {
+    if (!_checkPath()) {
       return;
     }
     final name = await Dialogs.showInputDialog("创建备份", "请输入备份名称");
@@ -39,9 +41,8 @@ class GameDetailPage extends GetView<GameController> {
     }
   }
 
-
   Future<void> _applyBackup(SaveBackup backup) async {
-    if(!_checkPath()) {
+    if (!_checkPath()) {
       return;
     }
 
@@ -52,16 +53,20 @@ class GameDetailPage extends GetView<GameController> {
 
     if (confirmed) {
       if (confirmed) {
-        await Dialogs.showProgressDialog("正在应用备份", () => Get.find<BackupController>().applyBackup(backup), result: (r) async {
-          if(r) {
-            Snacks.success("应用备份成功");
-          } else {
-            Snacks.success("应用备份失败");
-          }
-        }, error: (e) async {
-          Snacks.error("应用备份失败 $e");
-        });
-
+        await Dialogs.showProgressDialog(
+          "正在应用备份",
+          () => Get.find<BackupController>().applyBackup(backup),
+          result: (r) async {
+            if (r) {
+              Snacks.success("应用备份成功");
+            } else {
+              Snacks.success("应用备份失败");
+            }
+          },
+          error: (e) async {
+            Snacks.error("应用备份失败 $e");
+          },
+        );
       }
     }
   }
@@ -85,26 +90,10 @@ class GameDetailPage extends GetView<GameController> {
 
   Future<void> _launchGame() async {
     try {
-      final success = await gameProcessController
-          .launchGame(controller.game.value!.id, controller.game.value!.executablePath);
-      if (!success) {
-        Snacks.error('启动游戏失败');
-      }
-    } catch (e) {
-      Snacks.error('启动游戏失败: $e');
-    }
-  }
-
-  Future<void> _launchGameWithFileTracking() async {
-    final confirmed = await Dialogs.showFileTrackingConfirmDialog();
-    if (!confirmed) return;
-
-    try {
-      final success = await gameProcessController
-          .launchGameWithFileTracking(
+      final success = await gameProcessController.launchGame(
         controller.game.value!.id,
         controller.game.value!.executablePath,
-          );
+      );
       if (!success) {
         Snacks.error('启动游戏失败');
       }
@@ -112,15 +101,15 @@ class GameDetailPage extends GetView<GameController> {
       Snacks.error('启动游戏失败: $e');
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      if(controller.game.value == null) {
-        return Center(child: CircularProgressIndicator(),);
+      if (controller.game.value == null) {
+        return Center(child: CircularProgressIndicator());
       }
-      final info = gameProcessController.runningGames[controller.game.value!.id];
+      final info =
+          gameProcessController.runningGames[controller.game.value!.id];
       return Scaffold(
         appBar: AppBar(
           title: Text(controller.game.value!.title),
@@ -155,7 +144,6 @@ class GameDetailPage extends GetView<GameController> {
     });
   }
 
-
   Widget _buildGameInfo(GameProcessInfo? info) {
     return Card(
       child: Padding(
@@ -182,27 +170,27 @@ class GameDetailPage extends GetView<GameController> {
 
                       return coverPath != null && File(coverPath).existsSync()
                           ? ClipRRect(
-                        borderRadius: BorderRadius.circular(7),
-                        child: Image.file(
-                          File(coverPath),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                        ),
-                      )
+                              borderRadius: BorderRadius.circular(7),
+                              child: Image.file(
+                                File(coverPath),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            )
                           : Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.games,
-                            size: 32,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      );
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.games,
+                                  size: 32,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            );
                     },
                   ),
                 ),
@@ -213,14 +201,20 @@ class GameDetailPage extends GetView<GameController> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildPathInfoRow('执行文件', controller.game.value!.executablePath),
+                      _buildPathInfoRow(
+                        '执行文件',
+                        controller.game.value!.executablePath,
+                      ),
                       if (controller.game.value!.saveDataPath != null &&
                           controller.game.value!.saveDataPath!.isNotEmpty)
-                        _buildPathInfoRow('存档路径', controller.game.value!.saveDataPath!),
+                        _buildPathInfoRow(
+                          '存档路径',
+                          controller.game.value!.saveDataPath!,
+                        ),
                       if (info?.isRunning ?? false)
                         _buildInfoRow(
                           '运行状态',
-                          '${info?.processId}(${info?.processCount})',
+                          '${info?.processId}',
                           color: Colors.green,
                         ),
                       _buildInfoRow(
@@ -238,49 +232,44 @@ class GameDetailPage extends GetView<GameController> {
             Wrap(
               spacing: 12,
               runSpacing: 8,
-              children: (!(info?.isRunning ?? false)) ? [
-                ElevatedButton.icon(
-                  onPressed: _launchGame,
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('启动游戏'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _launchGameWithFileTracking,
-                  icon: const Icon(Icons.track_changes),
-                  label: const Text('启动游戏（并且追踪文件修改）'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _editGame,
-                  icon: const Icon(Icons.edit),
-                  label: const Text('编辑'),
-                ),
-              ] : [
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    await gameProcessController
-                        .killGame(controller.game.value!.id);
-                  },
-                  icon: const Icon(Icons.stop),
-                  label: const Text('停止游戏'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _editGame,
-                  icon: const Icon(Icons.edit),
-                  label: const Text('编辑'),
-                ),
-              ],
+              children: (!(info?.isRunning ?? false))
+                  ? [
+                      ElevatedButton.icon(
+                        onPressed: _launchGame,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('启动游戏'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+
+                      OutlinedButton.icon(
+                        onPressed: _editGame,
+                        icon: const Icon(Icons.edit),
+                        label: const Text('编辑'),
+                      ),
+                    ]
+                  : [
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          await gameProcessController.killGame(
+                            controller.game.value!.id,
+                          );
+                        },
+                        icon: const Icon(Icons.stop),
+                        label: const Text('停止游戏'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _editGame,
+                        icon: const Icon(Icons.edit),
+                        label: const Text('编辑'),
+                      ),
+                    ],
             ),
           ],
         ),
@@ -372,7 +361,9 @@ class GameDetailPage extends GetView<GameController> {
 
   Widget _buildBackupSection(BuildContext context) {
     return Obx(() {
-      final backups = AutoBackupService.sortBackupsWithAutoFirst(Get.find<BackupController>().backupMap.values.toList());
+      final backups = AutoBackupService.sortBackupsWithAutoFirst(
+        Get.find<BackupController>().backupMap.values.toList(),
+      );
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -384,12 +375,14 @@ class GameDetailPage extends GetView<GameController> {
                 children: [
                   Text(
                     '存档备份',
-                    style: context.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    style: context.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   ElevatedButton.icon(
                     onPressed:
-                    controller.game.value!.saveDataPath != null &&
-                        controller.game.value!.saveDataPath!.isNotEmpty
+                        controller.game.value!.saveDataPath != null &&
+                            controller.game.value!.saveDataPath!.isNotEmpty
                         ? _createBackup
                         : null,
                     icon: const Icon(Icons.add),
@@ -532,7 +525,9 @@ class GameDetailPage extends GetView<GameController> {
             children: [
               Text(
                 '游戏统计',
-                style: context.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: context.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
               _buildStatsContent(game),

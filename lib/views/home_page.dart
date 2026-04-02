@@ -471,7 +471,7 @@ class GameCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        '${info?.processId}(${info?.processCount})',
+        '${info?.processId}',
         style: const TextStyle(
           fontSize: 10,
           color: Colors.white,
